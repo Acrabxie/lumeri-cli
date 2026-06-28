@@ -1,0 +1,56 @@
+// Unit test for toolLabel() friendly labels — focuses on the NEW lumenframe
+// time tools/ops (parity with the server) plus the unmapped passthrough
+// contract. Run: node test/format-labels.mjs
+import { toolLabel } from "../src/format.js";
+
+const fail = [];
+
+// The new lumenframe tools/ops must each map to a non-empty friendly label
+// that is NOT the raw tool name (i.e. it was actually mapped).
+const newTools = [
+  ["lumen_seek", "Seek"],
+  ["lumen_render_range", "Render range"],
+  ["retime_segment", "Retime"],
+  ["merge_compositions", "Merge timelines"],
+];
+
+for (const [name, word] of newTools) {
+  const label = toolLabel(name);
+  if (!label || typeof label !== "string" || label.trim() === "") {
+    fail.push(`${name}: empty/invalid label (got ${JSON.stringify(label)})`);
+    continue;
+  }
+  if (label === name) {
+    fail.push(`${name}: not mapped — still returns the raw name`);
+    continue;
+  }
+  if (!label.includes(word)) {
+    fail.push(`${name}: label ${JSON.stringify(label)} missing expected word "${word}"`);
+  }
+}
+
+// Unmapped names must pass through unchanged (no regression of the fallback).
+const passthrough = "color_grade";
+if (toolLabel(passthrough) !== passthrough) {
+  fail.push(`passthrough: ${passthrough} should pass through unchanged, got ${JSON.stringify(toolLabel(passthrough))}`);
+}
+
+// Existing mapped tools must still resolve to their friendly labels (no regress).
+for (const name of ["read_file", "write_file", "remember", "log_note"]) {
+  const label = toolLabel(name);
+  if (!label || label === name) {
+    fail.push(`existing ${name}: lost its friendly label (got ${JSON.stringify(label)})`);
+  }
+}
+
+// Empty/missing name keeps its sensible default.
+if (toolLabel("") !== "tool" || toolLabel(undefined) !== "tool") {
+  fail.push("empty name should fall back to \"tool\"");
+}
+
+if (fail.length) {
+  console.error("FAIL:\n  " + fail.join("\n  "));
+  process.exit(1);
+}
+console.log("PASS — toolLabel new lumenframe labels + passthrough verified");
+process.exit(0);

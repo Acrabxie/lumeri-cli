@@ -74,6 +74,10 @@ const TOOL_LABELS = {
   organize_files: "🗂 organize files",
   remember: "🧠 remember",
   log_note: "🗒 log note",
+  lumen_seek: "⏩ Seek",
+  lumen_render_range: "🎬 Render range",
+  retime_segment: "⏱ Retime",
+  merge_compositions: "🔀 Merge timelines",
 };
 
 export function toolLabel(name) {
