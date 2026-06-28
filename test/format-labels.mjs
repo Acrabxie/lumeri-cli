@@ -12,6 +12,10 @@ const newTools = [
   ["lumen_render_range", "Render range"],
   ["retime_segment", "Retime"],
   ["merge_compositions", "Merge timelines"],
+  // lumen_patch time-editing ops the agent drives.
+  ["set_lane", "Set lane"],
+  ["set_range", "Set range"],
+  ["set_time_remap", "Speed curve"],
 ];
 
 for (const [name, word] of newTools) {
@@ -30,9 +34,10 @@ for (const [name, word] of newTools) {
 }
 
 // Unmapped names must pass through unchanged (no regression of the fallback).
-const passthrough = "color_grade";
-if (toolLabel(passthrough) !== passthrough) {
-  fail.push(`passthrough: ${passthrough} should pass through unchanged, got ${JSON.stringify(toolLabel(passthrough))}`);
+for (const passthrough of ["color_grade", "set_unknown_op"]) {
+  if (toolLabel(passthrough) !== passthrough) {
+    fail.push(`passthrough: ${passthrough} should pass through unchanged, got ${JSON.stringify(toolLabel(passthrough))}`);
+  }
 }
 
 // Existing mapped tools must still resolve to their friendly labels (no regress).

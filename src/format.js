@@ -78,6 +78,9 @@ const TOOL_LABELS = {
   lumen_render_range: "🎬 Render range",
   retime_segment: "⏱ Retime",
   merge_compositions: "🔀 Merge timelines",
+  set_lane: "🎚 Set lane",
+  set_range: "🎬 Set range",
+  set_time_remap: "⏱ Speed curve",
 };
 
 export function toolLabel(name) {
