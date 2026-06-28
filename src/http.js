@@ -1,0 +1,83 @@
+// Low-level HTTP against the local Lumeri sidecar. Uses Node's http/https
+// modules directly (never a proxy) so a machine-wide HTTP_PROXY / FlClash can't
+// hijack the loopback connection, and so we get raw streaming for SSE.
+
+import http from "node:http";
+import https from "node:https";
+import { URL } from "node:url";
+
+function lib(u) {
+  return u.protocol === "https:" ? https : http;
+}
+
+// JSON / raw-body / streamed request → resolves { status, headers, json, text }.
+// Pass `stream` (a Readable) + `contentLength` to upload without buffering the
+// whole body in memory.
+export function request(baseUrl, path, opts = {}) {
+  const { method = "GET", json, body, stream, contentLength, headers = {}, timeoutMs = 30000 } = opts;
+  const u = new URL(path, baseUrl);
+
+  let payload = body;
+  const hdrs = { Accept: "application/json", ...headers };
+  if (json !== undefined) {
+    payload = Buffer.from(JSON.stringify(json), "utf8");
+    hdrs["Content-Type"] = "application/json; charset=utf-8";
+  }
+  if (stream != null && contentLength != null && hdrs["Content-Length"] == null) {
+    hdrs["Content-Length"] = contentLength;
+  } else if (payload != null && hdrs["Content-Length"] == null) {
+    hdrs["Content-Length"] = Buffer.byteLength(payload);
+  }
+
+  return new Promise((resolve, reject) => {
+    const req = lib(u).request(
+      u,
+      { method, headers: hdrs },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          let parsed;
+          try {
+            parsed = text ? JSON.parse(text) : null;
+          } catch {
+            parsed = null;
+          }
+          resolve({
+            status: res.statusCode || 0,
+            headers: res.headers,
+            json: parsed,
+            text,
+          });
+        });
+      },
+    );
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`request timed out after ${timeoutMs}ms`));
+    });
+    req.on("error", reject);
+    if (stream != null) {
+      stream.on("error", (err) => req.destroy(err));
+      stream.pipe(req);
+    } else {
+      if (payload != null) req.write(payload);
+      req.end();
+    }
+  });
+}
+
+// Open a long-lived GET and hand the live response back to the caller for
+// incremental reads (used by the SSE client). Resolves once headers arrive.
+export function openStream(baseUrl, path, { headers = {} } = {}) {
+  const u = new URL(path, baseUrl);
+  return new Promise((resolve, reject) => {
+    const req = lib(u).request(
+      u,
+      { method: "GET", headers: { Accept: "text/event-stream", ...headers } },
+      (res) => resolve({ res, req }),
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}

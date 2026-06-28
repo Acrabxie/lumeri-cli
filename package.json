@@ -1,0 +1,28 @@
+{
+  "name": "lumeri-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lumeri CLI — a Claude Code–style terminal UI for the Lumeri v3 video-editing agent",
+  "type": "module",
+  "bin": {
+    "lumeri": "bin/lumeri.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node bin/lumeri.js",
+    "mock": "node scripts/mock-server.mjs",
+    "deploy-preview": "node scripts/install-preview.mjs",
+    "test": "node test/smoke.mjs && node test/recovery.mjs && node test/preview.mjs && node test/codex.mjs"
+  },
+  "dependencies": {
+    "htm": "^3.1.1",
+    "ink": "^7.1.0",
+    "react": "^19.2.7"
+  },
+  "devDependencies": {
+    "ink-testing-library": "^4.0.0",
+    "jsdom": "^29.1.1"
+  }
+}

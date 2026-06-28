@@ -1,0 +1,188 @@
+# Lumeri CLI
+
+A terminal client for the **Lumeri v3** video-editing agent, with a TUI modeled
+on Claude Code: a streaming chat transcript, live tool-call cards, FFmpeg
+progress bars, slash commands, and an inline input box — all rendered with
+[Ink](https://github.com/vadimdemedes/ink) (React for the terminal).
+
+It talks to a running Lumeri sidecar over its HTTP + SSE session protocol
+(`POST /sessions`, `POST /sessions/{id}/turn`, `GET /sessions/{id}/stream`, …).
+The CLI is a pure client — it ships no model, keys, or media processing.
+
+```
+╭─────────────────────────────────────────────────────────────╮
+│  ✦ Lumeri  v0.1.0  ·  video-editing agent in your terminal   │
+│                                                               │
+│  server   http://127.0.0.1:7788                               │
+│  • type to chat · /help for commands · /upload <path> …       │
+╰─────────────────────────────────────────────────────────────╯
+
+✔ connected · session v3-660dd4f26ca8
+
+› color grade my clip warm
+
+Sure — let me warm-grade your clip.
+
+⏺ color_grade(style: "warm")
+  ⎿ Applied warm grade to clip [v_002 ▶ video]
+⏺ generate_video(prompt: "a neon city")
+  ⎿ ✗ generate_video is not implemented
+     E_NOT_IMPLEMENTED
+     hint: this verb is a stub (Veo not wired)
+     valid: edit_video, color_grade, composite
+
+  delivered: v_002 · view: /open v_002
+```
+
+## Install
+
+```sh
+cd lumeri-cli
+npm install
+npm link        # makes `lumeri` a real command on your PATH
+```
+
+`npm link` symlinks `lumeri` into your global bin (e.g. `/opt/homebrew/bin`),
+so it's a genuine launch command resolved via PATH — not a shell alias. After
+that, just type **`lumeri`** in any terminal.
+
+Requires Node ≥ 18 (developed on Node 25). No build step — it runs straight from
+source via [htm](https://github.com/developit/htm).
+
+## Run
+
+```sh
+lumeri                                   # connect to http://127.0.0.1:7788
+lumeri --server http://127.0.0.1:8000    # custom sidecar
+LUMERI_SERVER=http://host:7788 lumeri    # via env
+lumeri --no-splash                        # skip the startup animation
+node bin/lumeri.js                        # without npm link
+```
+
+Launching plays a short ceremonial intro — the LUMERI wordmark scans in and the
+tagline types out (press any key to skip, or `--no-splash` / `LUMERI_NO_SPLASH=1`
+to disable). The sidecar is normally the launchd-managed `com.gemia.sidecar` on
+port 7788; the connection is established behind the animation.
+
+## Codex subscription backend (`lumeri codex`)
+
+Run a model on your **ChatGPT subscription's Codex quota** instead of metered
+API keys — the same mechanism the Codex CLI and tools like OpenClaw / OpenCode
+use. It's the official "Sign in with ChatGPT" OAuth flow (authorization code +
+PKCE against `auth.openai.com`, loopback callback on `:1455`) — no cookie
+scraping, no simulated login. After signing in, requests go to
+`https://chatgpt.com/backend-api/codex/responses` with your bearer token +
+account id, and usage is deducted from your plan's Codex limits.
+
+```sh
+lumeri codex login              # sign in with ChatGPT in the browser
+lumeri codex import             # or reuse an existing `codex` CLI login (no browser)
+lumeri codex status             # plan, account, token expiry
+lumeri codex chat "explain this stack trace" --model gpt-5.5
+lumeri codex logout
+```
+
+Notes:
+- ChatGPT-account Codex only accepts its own model slugs (e.g. `gpt-5.5`,
+  `gpt-5.4`); the metered `gpt-5` is rejected with HTTP 400.
+- Tokens live in `~/.lumeri/codex-auth.json` (`0600`), separate from
+  `~/.codex/auth.json` — refreshing here never desyncs your Codex CLI login.
+- Calls go out through your machine proxy (`HTTPS_PROXY`), unlike the loopback
+  sidecar traffic which deliberately bypasses it.
+- The programmatic surface is `createCodexProvider()` in
+  [`src/codex/provider.js`](src/codex/provider.js) — `{ login, import, status,
+  whoami, respond, stream }` — for wiring the subscription model into Lumeri.
+- ⚠️ Reusing the first-party Codex OAuth client for third-party calls is a grey
+  area; OpenAI may rate-limit or change this path. It's your own subscription,
+  used locally.
+
+## Slash commands
+
+| Command | Description |
+|---|---|
+| `/help` | Commands + keyboard shortcuts |
+| `/new` | Fresh session (clears the transcript) |
+| `/clear` | Clear the visible transcript (keep the session) |
+| `/upload <path>` | Upload a media file to the session |
+| `/assets` | List assets in the session |
+| `/preview` | (Re)open the preview window in your browser |
+| `/open <asset_id>` | Open a result asset in the system viewer |
+| `/timeline` | Show the current project timeline |
+| `/session` | Session id, server, connection state |
+| `/retry` | Reconnect / recreate the session |
+| `/quit` | Exit |
+
+### Shortcuts
+
+`enter` send · `\` + `enter` newline · `↑`/`↓` history & menu · `tab` complete a
+`/command` · `esc` clear input · `ctrl+c` twice to exit.
+
+## Preview window
+
+On launch, alongside the terminal, Lumeri opens a **preview window** in your
+browser — a read-only monitor (no input box; the terminal drives). It's the page
+`web/preview.html`, served same-origin by the sidecar at
+`/v3/preview.html?session=<id>` and attached to the same session. It shows the
+latest produced asset on a cinema stage, a filmstrip of every asset, live
+tool/progress activity, and a `final` badge on deliverables — all from the same
+SSE stream the terminal reads.
+
+Auto-open requires the page to be deployed into the sidecar's `static/v3` (it's
+served from disk, so no restart is needed):
+
+```sh
+npm run deploy-preview                 # copies web/preview.html into known static/v3 dirs
+npm run deploy-preview -- /path/to/gemia/static/v3   # explicit target
+```
+
+Disable auto-open with `--no-preview` or `LUMERI_NO_PREVIEW=1`; reopen any time
+with `/preview`. (The terminal checks `/v3/preview.html` exists before opening,
+so it stays quiet if the page isn't deployed.)
+
+## What it renders
+
+The SSE stream is rendered faithfully — no synthesized progress or status:
+
+- **`model_text_delta`** → streaming assistant text (Markdown-aware).
+- **`model_tool_call_start` / `_ready`** → a `⏺ verb(args)` card.
+- **`tool_exec_progress`** → a real FFmpeg progress bar (`█████░ 90%`).
+- **`tool_exec_result`** → the verb summary + an `[asset_id ▶ kind]` chip.
+- **`tool_exec_error`** → the typed error with `error_code`, `hint`,
+  `recovery`, and `valid_options`.
+- **`budget_gate`** → a budget banner with suggested alternatives.
+- **`turn_complete`** → marks final `deliverable_asset_ids`.
+- **`replay_gap`** → reconnects with `Last-Event-ID` and flags missed events.
+
+## Develop without the backend
+
+A scripted mock server speaks the same protocol so you can iterate offline:
+
+```sh
+npm run mock                              # http://127.0.0.1:7799
+lumeri --server http://127.0.0.1:7799     # in another terminal
+```
+
+## Test
+
+```sh
+npm test     # headless render regression check
+```
+
+## Layout
+
+```
+bin/lumeri.js          CLI entry (arg parsing, TTY guard, renders <App/>)
+src/App.js             session lifecycle, SSE dispatch, slash commands, state
+src/api.js             v3 HTTP wrappers
+src/http.js            loopback http/https (never proxied) + raw streaming
+src/sse.js             SSE client with Last-Event-ID reconnect/replay
+src/markdown.js        compact Markdown → Ink renderer
+src/logo.js            LUMERI wordmark (figlet "ANSI Shadow")
+src/components/        Splash · Banner · Turn · ToolCall · InputBox · StatusLine · Notice
+web/preview.html       read-only preview monitor (deploy into sidecar static/v3)
+scripts/mock-server.mjs   offline scripted v3 server
+scripts/install-preview.mjs  deploy preview.html into the sidecar
+test/smoke.mjs         headless render assertions
+test/recovery.mjs      replay_gap recovery / FIFO queue / open validation
+test/preview.mjs       headless preview-page DOM assertions (jsdom)
+```

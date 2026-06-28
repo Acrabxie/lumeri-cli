@@ -1,0 +1,122 @@
+// Typed wrappers over the Lumeri v3 HTTP surface (see gemia/v3_routes.py).
+//   POST   /sessions                       -> create
+//   GET    /sessions/{id}                  -> info (assets, latest_event_id)
+//   POST   /sessions/{id}/turn             -> submit user message (202; 409 if busy)
+//   POST   /sessions/{id}/assets           -> upload (raw body + X-Filename)
+//   GET    /sessions/{id}/assets           -> list
+//   GET    /sessions/{id}/timeline         -> project timeline
+//   POST   /sessions/{id}/close            -> close
+
+import fs from "node:fs";
+import path from "node:path";
+import { request } from "./http.js";
+
+export class ApiError extends Error {
+  constructor(message, status, code) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function ok(res, ...accept) {
+  const wanted = accept.length ? accept : [200, 201, 202];
+  if (!wanted.includes(res.status)) {
+    const msg = res.json?.error || res.text || `HTTP ${res.status}`;
+    throw new ApiError(msg, res.status, res.json?.code);
+  }
+  return res.json;
+}
+
+export async function health(baseUrl) {
+  const res = await request(baseUrl, "/health", { timeoutMs: 4000 });
+  return res.status === 200;
+}
+
+export async function createSession(baseUrl) {
+  const res = await request(baseUrl, "/sessions", { method: "POST", timeoutMs: 8000 });
+  return ok(res, 201);
+}
+
+export async function getInfo(baseUrl, sessionId) {
+  const res = await request(baseUrl, `/sessions/${sessionId}`);
+  return ok(res, 200);
+}
+
+export async function submitTurn(baseUrl, sessionId, message) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/turn`, {
+    method: "POST",
+    json: { message },
+  });
+  // 409 = a turn is already running; surface it distinctly.
+  if (res.status === 409) {
+    throw new ApiError("a turn is already in progress", 409, "E_BUSY");
+  }
+  return ok(res, 202);
+}
+
+export async function listAssets(baseUrl, sessionId) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/assets`);
+  return ok(res, 200).assets || [];
+}
+
+export async function getTimeline(baseUrl, sessionId) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/timeline`);
+  return ok(res, 200);
+}
+
+export async function closeSession(baseUrl, sessionId) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/close`, {
+    method: "POST",
+    timeoutMs: 5000,
+  });
+  return ok(res, 200);
+}
+
+// Server cap is LUMERI_V3_UPLOAD_MAX_BYTES (default 500 MiB); mirror it here so
+// oversized files are rejected immediately instead of streaming up then 413'ing.
+const UPLOAD_CAP = 500 * 1024 * 1024;
+
+export async function uploadAsset(baseUrl, sessionId, filePath) {
+  const abs = path.resolve(filePath.replace(/^~(?=\/|$)/, process.env.HOME || "~"));
+  const stat = await fs.promises.stat(abs); // throws ENOENT with a clear message
+  if (!stat.isFile()) throw new ApiError(`not a file: ${abs}`, 0, "E_NOT_FILE");
+  if (stat.size <= 0) throw new ApiError(`file is empty: ${abs}`, 0, "E_EMPTY");
+  if (stat.size > UPLOAD_CAP) {
+    throw new ApiError(`file too large: ${stat.size} > ${UPLOAD_CAP} bytes`, 0, "E_TOO_LARGE");
+  }
+  // Stream from disk instead of buffering the whole file in memory.
+  const res = await request(baseUrl, `/sessions/${sessionId}/assets`, {
+    method: "POST",
+    stream: fs.createReadStream(abs),
+    contentLength: stat.size,
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-Filename": encodeURIComponent(path.basename(abs)),
+    },
+    timeoutMs: 300000,
+  });
+  return ok(res, 201);
+}
+
+export function assetUrl(baseUrl, sessionId, assetId) {
+  return new URL(`/sessions/${sessionId}/assets/${assetId}`, baseUrl).toString();
+}
+
+// The read-only preview monitor (gemia static/v3/preview.html), attached to a
+// specific session. Served same-origin with the sidecar.
+export function previewUrl(baseUrl, sessionId) {
+  const u = new URL("/v3/preview.html", baseUrl);
+  u.searchParams.set("session", sessionId);
+  return u.toString();
+}
+
+export async function previewAvailable(baseUrl) {
+  try {
+    const res = await request(baseUrl, "/v3/preview.html", { timeoutMs: 3000 });
+    return res.status === 200;
+  } catch {
+    return false;
+  }
+}
