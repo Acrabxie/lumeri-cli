@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import { html } from "../html.js";
 import { color, glyph, spinnerFrames, assetStyle } from "../theme.js";
-import { formatArgs, truncate } from "../format.js";
+import { formatArgs, truncate, toolLabel } from "../format.js";
 
 function AssetChip({ assetId, kind }) {
   const st = assetStyle(kind);
@@ -93,7 +93,7 @@ export function ToolCall({ call, tick }) {
   return html`<${Box} flexDirection="column" marginTop=${0}>
     <${Box}>
       <${Text} color=${bulletColor}>${glyph.tool + " "}</${Text}>
-      <${Text} bold color=${color.tool}>${call.tool_name}</${Text}>
+      <${Text} bold color=${color.tool}>${toolLabel(call.tool_name)}</${Text}>
       ${argStr ? html`<${Text} color=${color.muted}>${"(" + argStr + ")"}</${Text}>` : null}
     </${Box}>
     ${lines}

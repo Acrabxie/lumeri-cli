@@ -10,9 +10,10 @@ const CONN = {
   offline: { t: "offline", c: color.error },
 };
 
-export function StatusLine({ busy, statusWord, startedAt, now, tick, conn, queued, ctrlCArmed }) {
+export function StatusLine({ busy, statusWord, startedAt, now, tick, conn, queued, ctrlCArmed, account }) {
   const frame = spinnerFrames[tick % spinnerFrames.length];
   const cl = CONN[conn] || CONN.connecting;
+  const who = account ? account.email || account.name || account.account_id : null;
 
   const left = busy
     ? html`<${Text}>
@@ -29,7 +30,10 @@ export function StatusLine({ busy, statusWord, startedAt, now, tick, conn, queue
   return html`<${Box} justifyContent="space-between" paddingX=${1}>
     <${Box}>${left}</${Box}>
     <${Box}>
-      ${queued > 0 ? html`<${Text} color=${color.muted}>${`queued ×${queued} · `}</${Text}>` : null}
+      ${queued > 0 ? html`<${Text} color=${color.muted}>${`queued ×${queued}   `}</${Text}>` : null}
+      ${who
+        ? html`<${Text}><${Text} color=${color.brand}>${glyph.bullet + " "}</${Text}><${Text} color=${color.muted}>${who + "   "}</${Text}></${Text}>`
+        : html`<${Text} color=${color.warn}>${glyph.bullet + " not signed in   "}</${Text}>`}
       ${conn !== "live"
         ? html`<${Text}><${Text} color=${cl.c}>${glyph.live + " "}</${Text}><${Text} color=${color.muted}>${cl.t}</${Text}></${Text}>`
         : null}

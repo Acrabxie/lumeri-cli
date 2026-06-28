@@ -12,8 +12,13 @@ export const COMMANDS = [
   { name: "timeline", desc: "Show the current project timeline" },
   { name: "session", desc: "Show session id, server, and connection state" },
   { name: "retry", desc: "Reconnect to the server / recreate the session" },
+  { name: "login", desc: "Sign in with your Google account" },
+  { name: "logout", desc: "Sign out of the current account" },
+  { name: "account", desc: "Show or switch account: /account [switch <#|id>]", arg: "[switch <#|id>]" },
+  { name: "cancel", desc: "Dismiss a pending question from Lumeri", hidden: true },
   { name: "quit", desc: "Exit Lumeri CLI" },
   { name: "exit", desc: "Exit Lumeri CLI", hidden: true },
+  { name: "whoami", desc: "Show the current account", hidden: true },
 ];
 
 // Given the raw input line, return the command match state for autocomplete.

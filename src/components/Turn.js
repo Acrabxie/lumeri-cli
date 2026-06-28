@@ -10,7 +10,9 @@ function Banner({ banner }) {
       ? color.error
       : banner.kind === "budget"
         ? color.warn
-        : color.muted;
+        : banner.kind === "ask"
+          ? color.brand
+          : color.muted; // turn_wrapup / final / unknown → informational
   return html`<${Box} flexDirection="column" marginTop=${0}>
     <${Text} color=${c}>${"  " + banner.text}</${Text}>
     ${banner.sub ? html`<${Text} color=${color.muted}>${"  " + banner.sub}</${Text}>` : null}

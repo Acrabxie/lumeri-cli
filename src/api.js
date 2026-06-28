@@ -61,6 +61,20 @@ export async function listAssets(baseUrl, sessionId) {
   return ok(res, 200).assets || [];
 }
 
+// Deliver the user's answer to a pending `ask_question` (elicit) back to the
+// session loop. Mirrors the web client (static/v3/v3.js showAskModal submit):
+//   POST /sessions/{id}/ask_response  { question_id, answers }
+// where `answers` is an OBJECT keyed by control key -> the user's value. The
+// server (gemia/v3_routes.py _ask_response) requires both and 404s an unknown
+// question_id. Accept 200/202/204 — the route returns 200 on success.
+export async function submitAskResponse(baseUrl, sessionId, questionId, answers) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/ask_response`, {
+    method: "POST",
+    json: { question_id: questionId, answers },
+  });
+  return ok(res, 200, 202, 204);
+}
+
 export async function getTimeline(baseUrl, sessionId) {
   const res = await request(baseUrl, `/sessions/${sessionId}/timeline`);
   return ok(res, 200);

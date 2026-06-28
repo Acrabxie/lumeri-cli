@@ -10,6 +10,7 @@ import {
   createSession,
   getInfo,
   submitTurn,
+  submitAskResponse,
   listAssets,
   getTimeline,
   closeSession,
@@ -18,13 +19,22 @@ import {
   previewUrl,
   previewAvailable,
 } from "./api.js";
+import {
+  getSession,
+  startGoogleLogin,
+  logout,
+  switchAccount,
+  accountLabel,
+} from "./auth.js";
 import { SseClient } from "./sse.js";
 import { parseSlash } from "./slash.js";
+import { toPendingAsk, buildAnswers } from "./ask.js";
 import { Banner } from "./components/Banner.js";
 import { Splash } from "./components/Splash.js";
 import { Notice } from "./components/Notice.js";
 import { Turn } from "./components/Turn.js";
 import { InputBox } from "./components/InputBox.js";
+import { AskPrompt } from "./components/AskPrompt.js";
 import { StatusLine } from "./components/StatusLine.js";
 
 export function App({ version, serverUrl, splash = true, preview = true }) {
@@ -49,6 +59,10 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     idSeq: 1,
     throttleTimer: null,
     ctrlCTimer: null,
+    account: null, // active gemia account (from /auth/session), or null = signed out
+    loginPoll: null, // setTimeout handle for the post-/login session poll
+    loginSeq: 0, // bumped to cancel a stale login poll (newer /login or /logout wins)
+    pendingAsk: null, // active ask_question awaiting the user's answer (elicit), or null
   }).current;
 
   const sseRef = useRef(null);
@@ -246,6 +260,44 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         drainQueue();
         break;
       }
+      case "turn_wrapup": {
+        // Graceful stop (circuit-breaker / budget exhaustion / doom loop /
+        // stream error). Informational — NOT an error — so surface the
+        // synthesized summary and end the turn like turn_complete. Mirrors the
+        // web client (static/v3/v3.js turn_wrapup handler).
+        const t = ensureCurrent();
+        t.banners.push({
+          kind: "turn_wrapup",
+          text: ev.message || `stopped: ${ev.reason || "wrap-up"}`,
+        });
+        finalizeCurrent();
+        resetTurnState({ keepQueue: true });
+        drainQueue();
+        break;
+      }
+      case "completion_check": {
+        // Internal one-shot completion gate (agent_loop_v3.py): the model called
+        // no tools and the host is nudging it to verify it's actually done. Not
+        // user-facing — handle quietly with a transient status word so it never
+        // shows an "unknown event" banner.
+        if (m.busy) m.statusWord = "Verifying";
+        break;
+      }
+      case "ask_question": {
+        // The agent paused on an `elicit` call: stash the question and flip the
+        // input into ANSWER mode. Mirrors the web client (showAskModal).
+        const pending = toPendingAsk(ev.question);
+        if (pending) {
+          m.pendingAsk = pending;
+          const t = ensureCurrent();
+          t.banners.push({
+            kind: "ask",
+            text: `Lumeri is asking: ${pending.title}`,
+            sub: "answer below — your reply is sent back to Lumeri",
+          });
+        }
+        break;
+      }
       default: {
         const t = ensureCurrent();
         t.banners.push({ kind: "unknown", text: `unknown event: ${ev.kind}` });
@@ -295,6 +347,19 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     renderNow();
   };
 
+  // Pull the active account from the backend (it holds the session, not us).
+  // Returns the /auth/session payload, or null when the server has no account
+  // support — so callers can tell "signed out" apart from "feature absent".
+  const refreshAccount = async () => {
+    try {
+      const session = await getSession(serverUrl);
+      m.account = session.account || null;
+      return session;
+    } catch {
+      return null;
+    }
+  };
+
   const init = async () => {
     m.conn = "connecting";
     renderNow();
@@ -314,6 +379,10 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       m.lastEventId = null;
       pushNotice("success", `connected · session ${m.sessionId}`);
       connectSse();
+      const session = await refreshAccount();
+      if (session && !session.account) {
+        pushNotice("info", "not signed in", ["/login to sign in with your Google account"]);
+      }
       openPreview(); // light up the preview window alongside the terminal
     } catch (e) {
       m.conn = "offline";
@@ -396,6 +465,16 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         if (sseRef.current) sseRef.current.stop();
         await init();
         return;
+      case "login":
+        await doLogin();
+        break;
+      case "logout":
+        await doLogout();
+        break;
+      case "account":
+      case "whoami":
+        await doAccount(arg);
+        break;
       case "upload":
         await doUpload(arg);
         break;
@@ -534,11 +613,199 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     }
   };
 
+  // ── accounts / auth ──────────────────────────────────────────────────
+  // Stop any in-flight login poll (a newer /login or a /logout supersedes it).
+  const cancelLoginPoll = () => {
+    m.loginSeq++;
+    if (m.loginPoll) {
+      clearTimeout(m.loginPoll);
+      m.loginPoll = null;
+    }
+  };
+
+  const doLogin = async () => {
+    let start;
+    try {
+      start = await startGoogleLogin(serverUrl);
+    } catch (e) {
+      if (e.status === 400) {
+        return pushNotice("error", "Google sign-in isn't configured on the server", [
+          "set google_oauth_client_id in ~/.gemia/config.json",
+          "(or the GEMIA_GOOGLE_OAUTH_CLIENT_ID env var), then restart the sidecar",
+        ]);
+      }
+      return pushNotice("error", `could not start sign-in: ${e.message}`);
+    }
+    const url = start.authorization_url;
+    if (!url) return pushNotice("error", "server did not return a sign-in URL");
+    const prevId = m.account?.account_id || null;
+    pushNotice("info", "opening your browser to sign in with Google…", [
+      url,
+      "approve there, then come back — this view updates automatically",
+    ]);
+    renderNow();
+    openExternal(url, "Google sign-in");
+
+    // The backend handles the loopback callback and flips active.json; we just
+    // poll /auth/session until the active account changes (or we give up).
+    cancelLoginPoll();
+    const token = m.loginSeq;
+    const deadline = Date.now() + 3 * 60 * 1000;
+    const poll = async () => {
+      if (token !== m.loginSeq) return; // superseded
+      let acct = null;
+      try {
+        acct = (await getSession(serverUrl)).account || null;
+      } catch {
+        /* transient while waiting on the browser; keep polling */
+      }
+      if (token !== m.loginSeq) return;
+      if (acct && acct.account_id && acct.account_id !== prevId) {
+        m.account = acct;
+        m.loginPoll = null;
+        pushNotice("success", `signed in as ${accountLabel(acct)}`);
+        renderNow();
+        return;
+      }
+      if (Date.now() > deadline) {
+        m.loginPoll = null;
+        pushNotice("info", "still waiting on the browser sign-in", [
+          "finish in the browser, then run /account to check",
+        ]);
+        renderNow();
+        return;
+      }
+      m.loginPoll = setTimeout(poll, 1500);
+      m.loginPoll.unref?.();
+    };
+    m.loginPoll = setTimeout(poll, 1500);
+    m.loginPoll.unref?.();
+  };
+
+  const doLogout = async () => {
+    cancelLoginPoll();
+    try {
+      await logout(serverUrl);
+      m.account = null;
+      pushNotice("success", "signed out");
+    } catch (e) {
+      pushNotice("error", `sign-out failed: ${e.message}`);
+    }
+    renderNow();
+  };
+
+  const doAccount = async (arg) => {
+    const parts = (arg || "").trim().split(/\s+/).filter(Boolean);
+    const sub = (parts[0] || "").toLowerCase();
+
+    if (sub === "switch") {
+      const target = parts[1];
+      if (!target) return pushNotice("error", "usage: /account switch <#|id>");
+      // The roster comes from /auth/session (always present) rather than the
+      // standalone /accounts route, which older backends don't expose.
+      let accounts;
+      try {
+        accounts = (await getSession(serverUrl)).accounts || [];
+      } catch (e) {
+        return pushNotice("error", `could not list accounts: ${e.message}`);
+      }
+      let chosen = null;
+      if (/^\d+$/.test(target)) chosen = accounts[Number(target) - 1];
+      else
+        chosen =
+          accounts.find((a) => a.account_id === target) ||
+          accounts.find((a) => a.account_id?.startsWith(target)) ||
+          accounts.find((a) => a.email === target);
+      if (!chosen) {
+        return pushNotice("error", `no such account: ${target}`, ["/account lists what's available"]);
+      }
+      try {
+        const acct = await switchAccount(serverUrl, chosen.account_id);
+        m.account = acct;
+        pushNotice("success", `switched to ${accountLabel(acct)}`);
+      } catch (e) {
+        pushNotice("error", `switch failed: ${e.message}`);
+      }
+      renderNow();
+      return;
+    }
+
+    // No sub-command → show current account + the roster.
+    const session = await refreshAccount();
+    if (!session) {
+      return pushNotice("error", "accounts unavailable", ["this server build may not support accounts"]);
+    }
+    const accounts = session.accounts || [];
+    const curId = session.account?.account_id || null;
+    const lines = [
+      session.account
+        ? `signed in as ${accountLabel(session.account)}`
+        : "not signed in — /login to sign in with Google",
+    ];
+    if (accounts.length) {
+      lines.push("");
+      accounts.forEach((a, i) => {
+        const mark = a.account_id === curId ? "●" : "○";
+        lines.push(`${mark} ${i + 1}. ${accountLabel(a)}  (${a.account_id})`);
+      });
+      lines.push("");
+      lines.push("switch with  /account switch <#|id>");
+    }
+    pushNotice("info", "accounts", lines);
+    renderNow();
+  };
+
+  // ── ask (elicit) answering ─────────────────────────────────────────────
+  // Deliver the user's answer to the pending ask_question back to the session
+  // loop, then clear answer mode so normal turn input resumes. Failing to
+  // answer must never wedge the UI: on error we surface a notice but keep the
+  // question pending so the user can retry (or /cancel to abandon it).
+  const answerAsk = async (raw) => {
+    const ask = m.pendingAsk;
+    if (!ask) return;
+    const answers = buildAnswers(ask, raw);
+    pushNotice("info", "sending your answer to Lumeri…");
+    renderNow();
+    try {
+      await submitAskResponse(serverUrl, m.sessionId, ask.questionId, answers);
+      m.pendingAsk = null;
+      pushNotice("success", "answer sent — Lumeri is continuing");
+    } catch (e) {
+      // Keep the question pending so the answer can be retyped; never wedge.
+      pushNotice("error", `could not send answer: ${e.message}`, [
+        "edit and submit again, or /cancel to drop the question",
+      ]);
+    }
+    renderNow();
+  };
+
+  // Abandon a pending ask without answering (/cancel) — unwedges the prompt.
+  const cancelAsk = () => {
+    if (!m.pendingAsk) return false;
+    m.pendingAsk = null;
+    pushNotice("info", "question dismissed — back to normal input");
+    renderNow();
+    return true;
+  };
+
   // ── input ────────────────────────────────────────────────────────────
   const onSubmit = (raw) => {
     const slash = parseSlash(raw);
     if (slash) {
+      // /cancel drops a pending ask; everything else runs as usual even mid-ask
+      // so the user is never locked out of commands like /help or /quit.
+      if (slash.name === "cancel") {
+        if (!cancelAsk()) pushNotice("info", "nothing to cancel");
+        renderNow();
+        return;
+      }
       runSlash(slash);
+      return;
+    }
+    // In answer mode, a plain line is the answer to the pending question.
+    if (m.pendingAsk) {
+      m.history.push(raw);
+      answerAsk(raw);
       return;
     }
     if (!m.sessionId || m.conn === "offline") {
@@ -593,6 +860,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       clearInterval(animate);
       if (m.throttleTimer) clearTimeout(m.throttleTimer);
       if (m.ctrlCTimer) clearTimeout(m.ctrlCTimer);
+      if (m.loginPoll) clearTimeout(m.loginPoll);
       if (sseRef.current) sseRef.current.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -621,7 +889,8 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
           <${Turn} turn=${m.current} tick=${tick} />
         </${Box}>`
       : null}
-    <${InputBox} onSubmit=${onSubmit} history=${m.history} />
+    ${m.pendingAsk ? html`<${AskPrompt} ask=${m.pendingAsk} />` : null}
+    <${InputBox} onSubmit=${onSubmit} history=${m.history} answerMode=${!!m.pendingAsk} />
     <${StatusLine}
       busy=${m.busy}
       statusWord=${m.statusWord}
@@ -631,6 +900,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       conn=${m.conn}
       queued=${m.queued.length}
       ctrlCArmed=${m.ctrlCArmed}
+      account=${m.account}
     />
   </${Box}>`;
 }

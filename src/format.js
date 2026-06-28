@@ -60,3 +60,23 @@ export function truncate(s, max = 200) {
   const str = String(s ?? "");
   return str.length > max ? str.slice(0, max - 1) + "…" : str;
 }
+
+// Friendly display labels for the file-management + memory tools so the
+// activity log reads cleanly (e.g. "read_file" → "📄 read file"). Falls back to
+// the raw tool name for anything unmapped — so unknown/future verbs always show
+// something sensible and existing verbs are never hidden.
+const TOOL_LABELS = {
+  read_file: "📄 read file",
+  write_file: "📝 write file",
+  copy_in: "📥 copy in",
+  list_dir: "📁 list dir",
+  move_file: "🚚 move file",
+  organize_files: "🗂 organize files",
+  remember: "🧠 remember",
+  log_note: "🗒 log note",
+};
+
+export function toolLabel(name) {
+  if (!name) return "tool";
+  return TOOL_LABELS[name] || name;
+}

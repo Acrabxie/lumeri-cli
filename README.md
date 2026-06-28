@@ -96,6 +96,20 @@ Notes:
   area; OpenAI may rate-limit or change this path. It's your own subscription,
   used locally.
 
+### Multi-provider router — written, not enabled
+
+`src/providers/` is dormant scaffolding for the day a single backend isn't
+enough (e.g. if OpenAI revokes the subscription path). It defines one `Provider`
+contract and three implementations — `vertex` (Lumeri's intended primary brain,
+a stub today since Gemini runs in the cloud sidecar), `codex` (the subscription
+provider above), `apikey` (metered last resort) — behind a `router` that fails
+over to the next provider when one is unavailable (auth/quota/5xx), while never
+switching mid-stream once tokens have started flowing.
+
+Nothing in the active path imports it — `lumeri codex` is unchanged. Enabling it
+later is a one-line change in [`src/providers/index.js`](src/providers/index.js).
+Covered by `test/providers.mjs` (in `npm test`).
+
 ## Slash commands
 
 | Command | Description |
@@ -110,7 +124,20 @@ Notes:
 | `/timeline` | Show the current project timeline |
 | `/session` | Session id, server, connection state |
 | `/retry` | Reconnect / recreate the session |
+| `/login` | Sign in with your Google account |
+| `/logout` | Sign out of the current account |
+| `/account [switch <#\|id>]` | Show the active account / roster, or switch |
 | `/quit` | Exit |
+
+### Accounts
+
+Lumeri data (memory, sessions, media) is scoped per Google account by the gemia
+sidecar, which owns the OAuth client and holds the active-account session
+server-side (`~/.gemia/accounts/`). `/login` opens your browser, the sidecar
+catches the loopback callback at `/auth/google/callback`, and the CLI updates the
+moment you're signed in — no token is stored on the client. The status line shows
+who you're signed in as. Sign-in needs `google_oauth_client_id` configured on the
+sidecar (`~/.gemia/config.json` or `$GEMIA_GOOGLE_OAUTH_CLIENT_ID`).
 
 ### Shortcuts
 

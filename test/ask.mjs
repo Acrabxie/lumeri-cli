@@ -1,0 +1,218 @@
+// Regression test for v3 ask/wrapup parity: ask_question puts the App into
+// answer mode and renders the question (no "unknown event" banner); submitting
+// an answer POSTs /ask_response with { question_id, answers:{...} }; turn_wrapup
+// ends the turn with an informational (non-error) banner; completion_check is
+// handled quietly (no "unknown event"). Drives the REAL App SSE dispatch path
+// (same as smoke.mjs), plus a unit check of the pure src/ask.js helpers.
+// Run: node test/ask.mjs
+import http from "node:http";
+import assert from "node:assert/strict";
+import { render } from "ink-testing-library";
+import { html } from "../src/html.js";
+import { App } from "../src/App.js";
+import { buildAnswers, describeQuestion, toPendingAsk } from "../src/ask.js";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let streamRes = null;
+let eid = 0;
+const send = (kind, extra = {}) => {
+  if (!streamRes) return;
+  eid += 1;
+  streamRes.write(`id: ${eid}\ndata: ${JSON.stringify({ kind, ...extra })}\n\n`);
+};
+
+// Capture every /ask_response body the client POSTs.
+const askResponses = [];
+
+const QUESTION = {
+  question_id: "q_test_1",
+  title: "How should I export this clip?",
+  description: "Pick a format.",
+  controls: {
+    format: {
+      type: "select",
+      options: [
+        { label: "MP4 (H.264)", value: "mp4" },
+        { label: "MOV (ProRes)", value: "mov" },
+      ],
+      default: "mp4",
+    },
+  },
+  metadata: {},
+};
+
+// Scripted turns keyed by what the user typed.
+async function runTurn(message) {
+  if (/ASK/.test(message)) {
+    send("turn_start");
+    await sleep(40);
+    send("model_text_delta", { delta: "need a detail\n" });
+    await sleep(40);
+    send("completion_check"); // (d) must NOT produce an unknown banner
+    await sleep(40);
+    send("ask_question", { question: QUESTION }); // (a) answer mode + render
+    return; // turn stays open until the answer arrives; server would resume
+  }
+  if (/WRAP/.test(message)) {
+    send("turn_start");
+    await sleep(40);
+    send("model_text_delta", { delta: "working\n" });
+    await sleep(40);
+    // (c) graceful stop — informational, ends the turn, shows ev.message
+    send("turn_wrapup", {
+      reason: "failure_breaker",
+      message: "Stopped after repeated tool failures; partial work saved.",
+      tools_succeeded: 1,
+      tools_failed: 3,
+      assets_produced: 1,
+    });
+    return;
+  }
+  send("turn_start");
+  await sleep(40);
+  send("model_text_delta", { delta: `echo:${message}\n` });
+  await sleep(120);
+  send("turn_complete", { final_asset_ids: [] });
+}
+
+const server = http.createServer((req, res) => {
+  const { method, url } = req;
+  const j = (s, o) => {
+    res.writeHead(s, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(o));
+  };
+  if (method === "GET" && url.startsWith("/health")) return j(200, { ok: true });
+  if (method === "POST" && url === "/sessions") return j(201, { session_id: "v3-a" });
+  if (method === "GET" && url.includes("/stream")) {
+    res.writeHead(200, { "Content-Type": "text/event-stream" });
+    streamRes = res;
+    return;
+  }
+  if (method === "GET" && /\/sessions\/[^/]+$/.test(url))
+    return j(200, { session_id: "v3-a", assets: [], latest_event_id: eid });
+  if (method === "GET" && url.includes("/assets")) return j(200, { assets: [] });
+  if (method === "POST" && url.includes("/ask_response")) {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(body);
+      } catch {}
+      askResponses.push(payload);
+      j(200, { question_id: payload.question_id, delivered: true });
+      // Resume + finish the turn so the post-answer flow is exercised.
+      send("model_text_delta", { delta: "thanks\n" });
+      setTimeout(() => send("turn_complete", { final_asset_ids: [] }), 40);
+    });
+    return;
+  }
+  if (method === "POST" && url.includes("/turn")) {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      j(202, { accepted: true });
+      let msg = "";
+      try {
+        msg = JSON.parse(body).message;
+      } catch {}
+      runTurn(msg);
+    });
+    return;
+  }
+  if (method === "POST" && url.includes("/close")) return j(200, { closed: true });
+  return j(404, {});
+});
+
+// ── unit checks of the pure ask helpers (headless, no render) ────────────
+{
+  const pending = toPendingAsk(QUESTION);
+  assert.equal(pending.questionId, "q_test_1");
+  const lines = describeQuestion(QUESTION).join("\n");
+  assert.ok(lines.includes("How should I export this clip?"), "title rendered");
+  assert.ok(lines.includes("MP4 (H.264)"), "select option label rendered");
+
+  // single select control: value passes through; index + label resolve to value
+  assert.deepEqual(buildAnswers(QUESTION, "mov"), { format: "mov" });
+  assert.deepEqual(buildAnswers(QUESTION, "2"), { format: "mov" }, "1-based index → value");
+  assert.deepEqual(buildAnswers(QUESTION, "MP4 (H.264)"), { format: "mp4" }, "label → value");
+
+  // multi-control: lines map to controls in order
+  const multi = {
+    question_id: "q2",
+    title: "two",
+    controls: { a: { type: "text" }, b: { type: "slider", min: 0, max: 10 } },
+  };
+  assert.deepEqual(buildAnswers(multi, "hello\n7"), { a: "hello", b: 7 });
+
+  // multi_select: comma-separated, resolved to values
+  const ms = {
+    question_id: "q3",
+    title: "ms",
+    controls: { tags: { type: "multi_select", options: [{ value: "x" }, { value: "y" }] } },
+  };
+  assert.deepEqual(buildAnswers(ms, "x, y"), { tags: ["x", "y"] });
+}
+
+await new Promise((r) => server.listen(0, "127.0.0.1", r));
+const base = `http://127.0.0.1:${server.address().port}`;
+const { frames, stdin, unmount } = render(
+  html`<${App} version="9.9.9" serverUrl=${base} splash=${false} preview=${false} />`,
+);
+const type = async (s) => {
+  stdin.write(s);
+  await sleep(50);
+  stdin.write("\r");
+  await sleep(60);
+};
+
+await sleep(400);
+
+// (c) turn_wrapup: informational banner + turn ends (busy cleared, so the next
+//     normal message must actually run).
+await type("WRAP-this");
+await sleep(300);
+await type("after-wrap");
+await sleep(400);
+
+// (a)+(b)+(d) ask flow: ask_question → answer mode + render → submit answer.
+await type("ASK-me");
+await sleep(400);
+const midFrames = frames.join("\n");
+// answer the pending question (single select control → typed value)
+await type("mov");
+await sleep(400);
+
+const all = frames.join("\n");
+const fail = [];
+
+// (d) no unknown banner anywhere
+if (all.includes("unknown event")) fail.push("d: an 'unknown event' banner leaked through");
+
+// (c) turn_wrapup shown as informational message, turn unwedged
+if (!all.includes("Stopped after repeated tool failures")) fail.push("c: turn_wrapup message missing");
+if (!all.includes("echo:after-wrap")) fail.push("c: turn did not unwedge after turn_wrapup");
+
+// (a) ask_question rendered the question + entered answer mode
+if (!midFrames.includes("How should I export this clip?")) fail.push("a: question text not rendered");
+if (!midFrames.includes("Lumeri is asking")) fail.push("a: answer-mode prompt not shown");
+
+// (b) the answer was POSTed with the right shape
+const askPost = askResponses.find((p) => p.question_id === "q_test_1");
+if (!askPost) fail.push("b: no /ask_response POST captured");
+else {
+  if (askPost.question_id !== "q_test_1") fail.push("b: wrong question_id in body");
+  if (!askPost.answers || typeof askPost.answers !== "object")
+    fail.push("b: answers is not an object");
+  else if (askPost.answers.format !== "mov")
+    fail.push(`b: expected answers.format='mov', got ${JSON.stringify(askPost.answers)}`);
+}
+
+unmount();
+server.close();
+if (fail.length) {
+  console.error("FAIL:\n  " + fail.join("\n  "));
+  process.exit(1);
+}
+console.log("PASS — ask/wrapup/completion_check parity: helpers + dispatch + /ask_response body");
+process.exit(0);

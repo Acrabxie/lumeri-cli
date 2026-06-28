@@ -5,9 +5,10 @@ import { color, glyph } from "../theme.js";
 import { autocompleteState } from "../slash.js";
 
 const PLACEHOLDER = "Send a message to Lumeri…  (/help for commands)";
+const ANSWER_PLACEHOLDER = "Type your answer to Lumeri…  (/cancel to dismiss)";
 const MENU_MAX = 6;
 
-export function InputBox({ onSubmit, history }) {
+export function InputBox({ onSubmit, history, answerMode = false }) {
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState(0);
   const [sel, setSel] = useState(0); // autocomplete highlight
@@ -181,6 +182,7 @@ export function InputBox({ onSubmit, history }) {
 
   // Render text with an inverse-video cursor block.
   const showPlaceholder = text.length === 0;
+  const placeholder = answerMode ? ANSWER_PLACEHOLDER : PLACEHOLDER;
   const before = text.slice(0, cursor);
   const atRaw = text.slice(cursor, cursor + 1);
   const at = atRaw === "" || atRaw === "\n" ? " " : atRaw;
@@ -190,7 +192,7 @@ export function InputBox({ onSubmit, history }) {
     <${Box} borderStyle="round" borderColor=${color.brand} paddingX=${1}>
       <${Text} color=${color.brand}>${glyph.user + " "}</${Text}>
       ${showPlaceholder
-        ? html`<${Text}><${Text} inverse> </${Text}><${Text} color=${color.muted}>${PLACEHOLDER}</${Text}></${Text}>`
+        ? html`<${Text}><${Text} inverse> </${Text}><${Text} color=${color.muted}>${placeholder}</${Text}></${Text}>`
         : html`<${Text}>${before}<${Text} inverse>${at}</${Text}>${after}</${Text}>`}
     </${Box}>
     ${matches.length
