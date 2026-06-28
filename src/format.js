@@ -81,6 +81,8 @@ const TOOL_LABELS = {
   set_lane: "🎚 Set lane",
   set_range: "🎬 Set range",
   set_time_remap: "⏱ Speed curve",
+  reverse: "⏪ Reverse",
+  ripple_delete: "✂️ Ripple delete",
 };
 
 export function toolLabel(name) {

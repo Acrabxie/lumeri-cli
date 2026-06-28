@@ -16,6 +16,9 @@ const newTools = [
   ["set_lane", "Set lane"],
   ["set_range", "Set range"],
   ["set_time_remap", "Speed curve"],
+  // New timeline ops: reverse a clip + ripple-delete a range.
+  ["reverse", "Reverse"],
+  ["ripple_delete", "Ripple delete"],
 ];
 
 for (const [name, word] of newTools) {
@@ -34,7 +37,9 @@ for (const [name, word] of newTools) {
 }
 
 // Unmapped names must pass through unchanged (no regression of the fallback).
-for (const passthrough of ["color_grade", "set_unknown_op"]) {
+// Includes a name that resembles the new ops but is NOT mapped, to prove the
+// passthrough still holds after adding reverse / ripple_delete.
+for (const passthrough of ["color_grade", "set_unknown_op", "ripple_unknown"]) {
   if (toolLabel(passthrough) !== passthrough) {
     fail.push(`passthrough: ${passthrough} should pass through unchanged, got ${JSON.stringify(toolLabel(passthrough))}`);
   }
