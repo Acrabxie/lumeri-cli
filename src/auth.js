@@ -24,10 +24,34 @@ function ok(res, ...accept) {
   return res.json;
 }
 
-// { account, accounts, google_client_id, has_google_client_id }. `account` is
-// null when no one is signed in.
+// { account, accounts, google_client_id, has_google_client_id, email_login_enabled }.
+// `account` is null when no one is signed in.
 export async function getSession(baseUrl) {
   const res = await request(baseUrl, "/auth/session", { timeoutMs: 6000 });
+  return ok(res, 200);
+}
+
+// Email one-time-code login (coexists with Google). `start` mails a 6-digit code
+// to the address; `verify` exchanges {email, code} for an activated account —
+// the backend flips active.json exactly like Google, so the CLI stays tokenless.
+// A 400 carries the server's message (code expired / too many attempts / SMTP
+// not configured), surfaced via ApiError.message.
+export async function startEmailLogin(baseUrl, email) {
+  // SMTP send can take a few seconds; give it room before timing out.
+  const res = await request(baseUrl, "/auth/email/start", {
+    method: "POST",
+    json: { email },
+    timeoutMs: 30000,
+  });
+  return ok(res, 200);
+}
+
+export async function verifyEmailLogin(baseUrl, email, code) {
+  const res = await request(baseUrl, "/auth/email/verify", {
+    method: "POST",
+    json: { email, code },
+    timeoutMs: 8000,
+  });
   return ok(res, 200);
 }
 

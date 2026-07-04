@@ -6,6 +6,8 @@ import http from "node:http";
 import {
   getSession,
   startGoogleLogin,
+  startEmailLogin,
+  verifyEmailLogin,
   logout,
   listAccounts,
   switchAccount,
@@ -37,6 +39,18 @@ const server = http.createServer(async (req, res) => {
   if (method === "POST" && url === "/auth/google/start") {
     if (!clientConfigured) return j(400, { error: "Google OAuth Client ID is not configured" });
     return j(200, { authorization_url: "https://accounts.google.com/o/oauth2/v2/auth?x=1", state: "s", redirect_uri: "http://127.0.0.1:7788/auth/google/callback", expires_at: 0 });
+  }
+  if (method === "POST" && url === "/auth/email/start") {
+    const email = String(JSON.parse((await readBody(req)) || "{}").email || "").trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return j(400, { error: "邮箱地址格式不正确" });
+    return j(200, { ok: true, email, ttl_seconds: 600, resend_after: 0 });
+  }
+  if (method === "POST" && url === "/auth/email/verify") {
+    const b = JSON.parse((await readBody(req)) || "{}");
+    const code = String(b.code || "").replace(/\D/g, "");
+    if (code !== "654321") return j(400, { error: "验证码不正确" });
+    active = { account_id: "email_test0001", provider: "email", email: String(b.email || "").toLowerCase(), email_verified: true };
+    return j(200, { ok: true, account: active });
   }
   if (method === "POST" && url === "/auth/logout") {
     active = null;
@@ -102,6 +116,33 @@ await ok("switchAccount rejects an unknown id with a 404", async () => {
     () => switchAccount(base, "nope"),
     (e) => e.status === 404,
   );
+});
+
+await ok("startEmailLogin sends a code for a valid address (normalizes case)", async () => {
+  const r = await startEmailLogin(base, "New.User@Mail.Dev");
+  assert.equal(r.ok, true);
+  assert.equal(r.email, "new.user@mail.dev");
+});
+
+await ok("startEmailLogin rejects a malformed address with a 400", async () => {
+  await assert.rejects(
+    () => startEmailLogin(base, "nope"),
+    (e) => e.status === 400 && /邮箱/.test(e.message),
+  );
+});
+
+await ok("verifyEmailLogin rejects a wrong code with a 400", async () => {
+  await assert.rejects(
+    () => verifyEmailLogin(base, "new.user@mail.dev", "000000"),
+    (e) => e.status === 400,
+  );
+});
+
+await ok("verifyEmailLogin activates an email-provider account on the right code", async () => {
+  const r = await verifyEmailLogin(base, "new.user@mail.dev", "654321");
+  assert.equal(r.account.provider, "email");
+  assert.equal(r.account.email, "new.user@mail.dev");
+  assert.equal((await getSession(base)).account.provider, "email");
 });
 
 await ok("logout clears the active account", async () => {

@@ -22,6 +22,8 @@ import {
 import {
   getSession,
   startGoogleLogin,
+  startEmailLogin,
+  verifyEmailLogin,
   logout,
   switchAccount,
   accountLabel,
@@ -63,6 +65,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     loginPoll: null, // setTimeout handle for the post-/login session poll
     loginSeq: 0, // bumped to cancel a stale login poll (newer /login or /logout wins)
     pendingAsk: null, // active ask_question awaiting the user's answer (elicit), or null
+    pendingLogin: null, // active email-code sign-in: { step: "email"|"sending"|"code", email? }
   }).current;
 
   const sseRef = useRef(null);
@@ -381,7 +384,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       connectSse();
       const session = await refreshAccount();
       if (session && !session.account) {
-        pushNotice("info", "not signed in", ["/login to sign in with your Google account"]);
+        pushNotice("info", "not signed in", ["/login to sign in — email code or Google"]);
       }
       openPreview(); // light up the preview window alongside the terminal
     } catch (e) {
@@ -466,7 +469,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         await init();
         return;
       case "login":
-        await doLogin();
+        await doLogin(arg);
         break;
       case "logout":
         await doLogout();
@@ -623,7 +626,80 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     }
   };
 
-  const doLogin = async () => {
+  // /login          → interactive email-code sign-in
+  // /login <email>   → email-code sign-in for that address
+  // /login google    → browser Google sign-in
+  const doLogin = async (arg) => {
+    const a = (arg || "").trim();
+    if (a.toLowerCase() === "google") return doGoogleLogin();
+    if (a.includes("@")) return beginEmailLogin(a);
+    m.pendingLogin = { step: "email" };
+    pushNotice("info", "sign in with an email code", [
+      "type your email address and press enter",
+      "or /login google to use Google · /cancel to abort",
+    ]);
+    renderNow();
+  };
+
+  // Mail a code to `email` and switch the prompt into code-entry mode.
+  const beginEmailLogin = async (email) => {
+    m.pendingLogin = { step: "sending", email };
+    renderNow();
+    try {
+      await startEmailLogin(serverUrl, email);
+      m.pendingLogin = { step: "code", email };
+      pushNotice("info", `code sent to ${email}`, [
+        "enter the 6-digit code · blank line to resend · /cancel to abort",
+      ]);
+    } catch (e) {
+      m.pendingLogin = { step: "email" };
+      pushNotice("error", `couldn't send a code: ${e.message}`, ["type a different email, or /cancel"]);
+    }
+    renderNow();
+  };
+
+  // A plain line typed while m.pendingLogin is set: first the email, then the code.
+  const handleLoginInput = async (raw) => {
+    const pl = m.pendingLogin;
+    if (!pl) return;
+    const val = (raw || "").trim();
+    if (pl.step === "email") {
+      if (val) await beginEmailLogin(val);
+      return;
+    }
+    if (pl.step === "code") {
+      if (!val) {
+        try {
+          await startEmailLogin(serverUrl, pl.email);
+          pushNotice("info", "code resent");
+        } catch (e) {
+          pushNotice("error", `couldn't resend: ${e.message}`);
+        }
+        renderNow();
+        return;
+      }
+      try {
+        const r = await verifyEmailLogin(serverUrl, pl.email, val.replace(/\D/g, ""));
+        m.account = r.account || (await refreshAccount())?.account || null;
+        m.pendingLogin = null;
+        pushNotice("success", `signed in as ${accountLabel(m.account)}`);
+      } catch (e) {
+        pushNotice("error", e.message, ["enter the code again, or /cancel to abort"]);
+      }
+      renderNow();
+    }
+  };
+
+  // Abandon an in-progress email sign-in (/cancel).
+  const cancelLogin = () => {
+    if (!m.pendingLogin) return false;
+    m.pendingLogin = null;
+    pushNotice("info", "sign-in cancelled — back to normal input");
+    renderNow();
+    return true;
+  };
+
+  const doGoogleLogin = async () => {
     let start;
     try {
       start = await startGoogleLogin(serverUrl);
@@ -740,7 +816,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     const lines = [
       session.account
         ? `signed in as ${accountLabel(session.account)}`
-        : "not signed in — /login to sign in with Google",
+        : "not signed in — /login (email code or Google)",
     ];
     if (accounts.length) {
       lines.push("");
@@ -795,11 +871,17 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       // /cancel drops a pending ask; everything else runs as usual even mid-ask
       // so the user is never locked out of commands like /help or /quit.
       if (slash.name === "cancel") {
-        if (!cancelAsk()) pushNotice("info", "nothing to cancel");
+        if (!cancelLogin() && !cancelAsk()) pushNotice("info", "nothing to cancel");
         renderNow();
         return;
       }
       runSlash(slash);
+      return;
+    }
+    // While signing in by email, a plain line is the address, then the code.
+    if (m.pendingLogin) {
+      m.history.push(raw);
+      handleLoginInput(raw);
       return;
     }
     // In answer mode, a plain line is the answer to the pending question.
@@ -890,7 +972,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         </${Box}>`
       : null}
     ${m.pendingAsk ? html`<${AskPrompt} ask=${m.pendingAsk} />` : null}
-    <${InputBox} onSubmit=${onSubmit} history=${m.history} answerMode=${!!m.pendingAsk} />
+    <${InputBox} onSubmit=${onSubmit} history=${m.history} answerMode=${!!m.pendingAsk || !!m.pendingLogin} />
     <${StatusLine}
       busy=${m.busy}
       statusWord=${m.statusWord}

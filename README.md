@@ -124,20 +124,36 @@ Covered by `test/providers.mjs` (in `npm test`).
 | `/timeline` | Show the current project timeline |
 | `/session` | Session id, server, connection state |
 | `/retry` | Reconnect / recreate the session |
-| `/login` | Sign in with your Google account |
+| `/login [google]` | Sign in — emailed code, or `/login google` for Google |
 | `/logout` | Sign out of the current account |
 | `/account [switch <#\|id>]` | Show the active account / roster, or switch |
 | `/quit` | Exit |
 
 ### Accounts
 
-Lumeri data (memory, sessions, media) is scoped per Google account by the gemia
-sidecar, which owns the OAuth client and holds the active-account session
-server-side (`~/.gemia/accounts/`). `/login` opens your browser, the sidecar
-catches the loopback callback at `/auth/google/callback`, and the CLI updates the
-moment you're signed in — no token is stored on the client. The status line shows
-who you're signed in as. Sign-in needs `google_oauth_client_id` configured on the
-sidecar (`~/.gemia/config.json` or `$GEMIA_GOOGLE_OAUTH_CLIENT_ID`).
+Lumeri data (memory, sessions, media) is scoped per account by the gemia
+sidecar, which holds the active-account session server-side
+(`~/.gemia/accounts/`) — no token is ever stored on the client. Two ways to sign
+in, both available inside the TUI (`/login`) and as a plain stdout command that
+runs before the app (`lumeri login`, like `lumeri codex login`):
+
+```
+lumeri login            # pick email code or Google
+lumeri login email      # a 6-digit code mailed to you
+lumeri login google     # browser Google sign-in
+lumeri whoami           # who's signed in
+lumeri logout
+```
+
+- Email code: enter your address, the sidecar mails a 6-digit code (valid 10
+  minutes), you type it back. Needs SMTP configured on the sidecar (the `smtp`
+  block in `~/.gemia/config.json`).
+- Google: opens your browser; the sidecar catches the loopback callback at
+  `/auth/google/callback` and the CLI updates the moment you're signed in. Needs
+  `google_oauth_client_id` on the sidecar (`~/.gemia/config.json` or
+  `$GEMIA_GOOGLE_OAUTH_CLIENT_ID`).
+
+The status line shows who you're signed in as.
 
 ### Shortcuts
 

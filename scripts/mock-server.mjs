@@ -130,6 +130,7 @@ const server = http.createServer((req, res) => {
       accounts: DEMO_ACCOUNTS,
       google_client_id: "demo.apps.googleusercontent.com",
       has_google_client_id: true,
+      email_login_enabled: true,
     });
   }
   if (method === "POST" && url === "/auth/google/start") {
@@ -144,6 +145,58 @@ const server = http.createServer((req, res) => {
   if (method === "GET" && url.startsWith("/auth/google/callback")) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     return res.end("<!doctype html><h2>Signed in (mock). You can close this tab.</h2>");
+  }
+  // Email one-time-code login. The mock "sends" instantly and always accepts the
+  // fixed code 123456 (real backend mails a random code via SMTP).
+  if (method === "POST" && url === "/auth/email/start") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let email = "";
+      try {
+        email = String(JSON.parse(body || "{}").email || "").trim().toLowerCase();
+      } catch {
+        /* ignore */
+      }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        return json(res, 400, { error: "邮箱地址格式不正确", user_message: "邮箱地址格式不正确" });
+      }
+      json(res, 200, { ok: true, email, ttl_seconds: 600, resend_after: 0 });
+    });
+    return;
+  }
+  if (method === "POST" && url === "/auth/email/verify") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let email = "";
+      let code = "";
+      try {
+        const b = JSON.parse(body || "{}");
+        email = String(b.email || "").trim().toLowerCase();
+        code = String(b.code || "").replace(/\D/g, "");
+      } catch {
+        /* ignore */
+      }
+      if (code !== "123456") {
+        return json(res, 400, { error: "验证码不正确，请重新输入", user_message: "验证码不正确，请重新输入" });
+      }
+      activeAccount = {
+        account_id: "email_mock00000001",
+        provider: "email",
+        email,
+        name: email.split("@")[0],
+        email_verified: true,
+      };
+      json(res, 200, {
+        ok: true,
+        account: activeAccount,
+        accounts: DEMO_ACCOUNTS,
+        has_google_client_id: true,
+        email_login_enabled: true,
+      });
+    });
+    return;
   }
   if (method === "POST" && url === "/auth/logout") {
     activeAccount = null;
