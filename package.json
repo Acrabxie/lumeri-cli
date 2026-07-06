@@ -14,7 +14,7 @@
     "start": "node bin/lumeri.js",
     "mock": "node scripts/mock-server.mjs",
     "deploy-preview": "node scripts/install-preview.mjs",
-    "test": "node test/smoke.mjs && node test/recovery.mjs && node test/preview.mjs && node test/codex.mjs && node test/providers.mjs && node test/auth.mjs && node test/login-tui.mjs && node test/ask.mjs && node test/format-labels.mjs"
+    "test": "node test/smoke.mjs && node test/recovery.mjs && node test/preview.mjs && node test/codex.mjs && node test/providers.mjs && node test/auth.mjs && node test/login-tui.mjs && node test/ask.mjs && node test/format-labels.mjs && node test/plan.mjs"
   },
   "dependencies": {
     "htm": "^3.1.1",

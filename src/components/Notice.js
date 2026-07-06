@@ -15,6 +15,7 @@ const SHORTCUTS = [
   ["\\ + enter", "newline"],
   ["↑ / ↓", "history / menu"],
   ["tab", "complete /command"],
+  ["shift+tab", "toggle plan mode"],
   ["esc", "clear input"],
   ["ctrl+c", "exit (twice)"],
 ];

@@ -16,6 +16,7 @@ import {
   annotateMediaLibrary,
   listMediaAnnotations,
   getTimeline,
+  setPlanMode,
   closeSession,
   uploadAsset,
   assetUrl,
@@ -69,6 +70,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     loginSeq: 0, // bumped to cancel a stale login poll (newer /login or /logout wins)
     pendingAsk: null, // active ask_question awaiting the user's answer (elicit), or null
     pendingLogin: null, // active email-code sign-in: { step: "email"|"sending"|"code", email? }
+    planMode: false, // mirrors the backend per-session plan-mode flag
   }).current;
 
   const sseRef = useRef(null);
@@ -224,6 +226,24 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         });
         break;
       }
+      case "plan_gate": {
+        // A mutating tool was blocked by plan mode — mirror the budget_gate
+        // treatment (web: static/v3/v3.js plan_gate handler).
+        const t = ensureCurrent();
+        const call = t.callsById.get(ev.call_id);
+        if (call) call.status = "gated";
+        t.banners.push({
+          kind: "plan",
+          text: `计划模式拦截了 ${ev.tool_name || "tool"}（规划期间不执行改动）`,
+        });
+        break;
+      }
+      case "plan_mode_changed": {
+        // Authoritative state broadcast — fires for our own /plan toggle AND
+        // for toggles made from the web UI on the same session.
+        m.planMode = !!ev.enabled;
+        break;
+      }
       case "timeline_op":
         refreshTimelineNotice(ev);
         break;
@@ -257,6 +277,12 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         finalizeCurrent();
         resetTurnState({ keepQueue: true });
         drainQueue();
+        // While planning, a completed turn means the plan text is on screen.
+        if (m.planMode) {
+          pushNotice("info", "计划已就绪", [
+            "/plan approve 批准并执行 · 继续输入可修改计划 · /plan off 退出计划模式",
+          ]);
+        }
         break;
       }
       case "turn_error": {
@@ -346,6 +372,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     try {
       const info = await getInfo(serverUrl, m.sessionId);
       if (info && info.latest_event_id != null) m.lastEventId = String(info.latest_event_id);
+      if (info && typeof info.plan_mode === "boolean") m.planMode = info.plan_mode;
     } catch {
       /* keep the current cursor if the resync probe fails */
     }
@@ -384,6 +411,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       const s = await createSession(serverUrl);
       m.sessionId = s.session_id;
       m.lastEventId = null;
+      m.planMode = false; // fresh sessions start with plan mode off
       pushNotice("success", `connected · session ${m.sessionId}`);
       connectSse();
       const session = await refreshAccount();
@@ -443,6 +471,61 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     }
   };
 
+  // ── plan mode ────────────────────────────────────────────────────────
+  // /plan → toggle · /plan on|off → explicit · /plan approve → exit plan
+  // mode and send the approval message so the agent executes the plan.
+  // Web parity: static/v3/v3.js plan toggle + approval bar.
+  const PLAN_APPROVE_MESSAGE =
+    "计划已批准，请立即按计划执行。(Plan approved — execute it now.)";
+
+  const doPlan = async (arg) => {
+    if (!m.sessionId || m.conn === "offline") {
+      pushNotice("error", "not connected — /retry to reconnect");
+      return;
+    }
+    const sub = (arg || "").trim().toLowerCase();
+    if (sub === "approve") {
+      if (!m.planMode) {
+        pushNotice("info", "计划模式未开启", ["/plan 或 shift+tab 先进入规划"]);
+        return;
+      }
+      if (m.busy) {
+        pushNotice("error", "回合仍在进行中 — 等 Lumeri 停下来再批准");
+        return;
+      }
+      try {
+        const r = await setPlanMode(serverUrl, m.sessionId, false);
+        m.planMode = !!r.plan_mode;
+        pushNotice("success", "计划已批准 — 开始执行");
+        sendMessage(PLAN_APPROVE_MESSAGE);
+      } catch (e) {
+        pushNotice("error", `approve failed: ${e.message}`);
+      }
+      return;
+    }
+    let next;
+    if (sub === "on") next = true;
+    else if (sub === "off") next = false;
+    else if (sub === "") next = !m.planMode;
+    else {
+      pushNotice("error", `unknown: /plan ${sub}`, ["usage: /plan [on|off|approve]"]);
+      return;
+    }
+    try {
+      const r = await setPlanMode(serverUrl, m.sessionId, next);
+      m.planMode = !!r.plan_mode;
+      if (m.planMode) {
+        pushNotice("info", "计划模式已开启 — 只查看和规划，不做改动", [
+          "描述目标让 Lumeri 出计划 · /plan approve 批准执行 · shift+tab 快速切换",
+        ]);
+      } else {
+        pushNotice("success", "计划模式已关闭");
+      }
+    } catch (e) {
+      pushNotice("error", `plan mode toggle failed: ${e.message}`);
+    }
+  };
+
   // ── slash commands ───────────────────────────────────────────────────
   const runSlash = async (slash) => {
     const { name, arg } = slash;
@@ -496,6 +579,9 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         break;
       case "timeline":
         await doTimeline();
+        break;
+      case "plan":
+        await doPlan(arg);
         break;
       case "annotate":
         await doAnnotate(arg);
@@ -1024,8 +1110,14 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     if (m.sessionId) await closeSession(serverUrl, m.sessionId).catch(() => {});
   };
 
-  // ── ctrl+c / ctrl+d ──────────────────────────────────────────────────
+  // ── ctrl+c / ctrl+d / shift+tab ──────────────────────────────────────
   useInput((input, key) => {
+    // shift+tab toggles plan mode (InputBox ignores it; Ink broadcasts every
+    // keypress to all useInput hooks).
+    if (key.tab && key.shift) {
+      doPlan("").finally(() => renderNow());
+      return;
+    }
     if (key.ctrl && input === "c") {
       if (m.ctrlCArmed) {
         shutdown().finally(() => exit());
@@ -1098,6 +1190,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       queued=${m.queued.length}
       ctrlCArmed=${m.ctrlCArmed}
       account=${m.account}
+      planMode=${m.planMode}
     />
   </${Box}>`;
 }

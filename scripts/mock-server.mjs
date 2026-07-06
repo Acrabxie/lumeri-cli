@@ -75,7 +75,29 @@ async function scriptedAskTurn(sid, message) {
   emit(sid, "turn_complete", { deliverable_asset_ids: [] });
 }
 
+// Plan-mode turn (mirrors gemia plan_mode.py): a mutating tool is gated with
+// a plan_gate event, then the model presents a plan as text.
+async function scriptedPlanTurn(sid, message) {
+  emit(sid, "turn_start");
+  emit(sid, "model_text_delta", { delta: "先看一下当前素材，再给你一个方案。\n" });
+  await sleep(150);
+  emit(sid, "model_tool_call_start", { call_id: "p1", tool_name: "color_grade" });
+  emit(sid, "model_tool_call_ready", { call_id: "p1", args: { style: "warm" } });
+  emit(sid, "plan_gate", {
+    call_id: "p1",
+    tool_name: "color_grade",
+    message: "Plan mode is ON: 'color_grade' is blocked.",
+  });
+  await sleep(150);
+  emit(sid, "model_text_delta", {
+    delta: "计划：\n1. color_grade 暖色调\n2. add_overlay 标题\n3. export 1080p\n批准后我就开始执行。",
+  });
+  await sleep(150);
+  emit(sid, "turn_complete", { deliverable_asset_ids: [] });
+}
+
 async function scriptedTurn(sid, message) {
+  if (sessions.get(sid)?.planMode) return scriptedPlanTurn(sid, message);
   if (/\bask\b/i.test(message || "")) return scriptedAskTurn(sid, message);
   emit(sid, "turn_start");
   for (const d of ["Sure — let me ", "**warm-grade** ", `your clip.\n`]) {
@@ -254,7 +276,35 @@ const server = http.createServer((req, res) => {
   }
   if (method === "GET" && sub === "/assets") return json(res, 200, { assets: [] });
   if (method === "GET" && sub === "") {
-    return json(res, 200, { session_id: sid, assets: [], latest_event_id: sessions.get(sid)?.eid || 0 });
+    const s = sessions.get(sid);
+    return json(res, 200, {
+      session_id: sid,
+      assets: [],
+      latest_event_id: s?.eid || 0,
+      plan_mode: !!s?.planMode,
+    });
+  }
+  if (method === "POST" && sub === "/plan_mode") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let enabled;
+      try {
+        enabled = JSON.parse(body).enabled;
+      } catch {
+        /* ignore */
+      }
+      if (typeof enabled !== "boolean") {
+        return json(res, 400, { error: "request body must include boolean 'enabled'" });
+      }
+      const s = sessions.get(sid);
+      if (s && s.planMode !== enabled) {
+        s.planMode = enabled;
+        emit(sid, "plan_mode_changed", { enabled });
+      }
+      json(res, 200, { session_id: sid, plan_mode: enabled });
+    });
+    return;
   }
   if (method === "POST" && sub === "/turn") {
     let body = "";

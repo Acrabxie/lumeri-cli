@@ -99,6 +99,16 @@ export async function submitAskResponse(baseUrl, sessionId, questionId, answers)
   return ok(res, 200, 202, 204);
 }
 
+// Toggle the session's plan mode (gemia/v3_routes.py _set_plan_mode). The
+// backend also broadcasts a `plan_mode_changed` SSE event to every client.
+export async function setPlanMode(baseUrl, sessionId, enabled) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/plan_mode`, {
+    method: "POST",
+    json: { enabled: !!enabled },
+  });
+  return ok(res, 200);
+}
+
 export async function getTimeline(baseUrl, sessionId) {
   const res = await request(baseUrl, `/sessions/${sessionId}/timeline`);
   return ok(res, 200);

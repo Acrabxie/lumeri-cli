@@ -12,6 +12,7 @@ export const COMMANDS = [
   { name: "timeline", desc: "Show the current project timeline" },
   { name: "annotate", desc: "Annotate media-library videos: /annotate <asset_id|all>", arg: "<asset_id|all>" },
   { name: "annotations", desc: "List media-library annotations: /annotations [asset_id]", arg: "[asset_id]" },
+  { name: "plan", desc: "Plan mode: /plan [on|off|approve] — 只规划不执行，批准后执行", arg: "[on|off|approve]" },
   { name: "session", desc: "Show session id, server, and connection state" },
   { name: "retry", desc: "Reconnect to the server / recreate the session" },
   { name: "login", desc: "Sign in: opens browser, or /login email / /login google" },
