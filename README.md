@@ -122,6 +122,8 @@ Covered by `test/providers.mjs` (in `npm test`).
 | `/preview` | (Re)open the preview window in your browser |
 | `/open <asset_id>` | Open a result asset in the system viewer |
 | `/timeline` | Show the current project timeline |
+| `/annotate <asset_id\|all>` | Gemini-annotate media-library videos |
+| `/annotations [asset_id]` | List media-library annotations |
 | `/session` | Session id, server, connection state |
 | `/retry` | Reconnect / recreate the session |
 | `/login [google]` | Sign in — emailed code, or `/login google` for Google |

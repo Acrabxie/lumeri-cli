@@ -61,6 +61,30 @@ export async function listAssets(baseUrl, sessionId) {
   return ok(res, 200).assets || [];
 }
 
+export async function listMediaLibrary(baseUrl, { kind = "", q = "", limit = 100 } = {}) {
+  const params = new URLSearchParams();
+  if (kind) params.set("kind", kind);
+  if (q) params.set("q", q);
+  if (limit) params.set("limit", String(limit));
+  const suffix = params.toString() ? `?${params}` : "";
+  const res = await request(baseUrl, `/media-library/list${suffix}`);
+  return ok(res, 200).assets || [];
+}
+
+export async function annotateMediaLibrary(baseUrl, body) {
+  const res = await request(baseUrl, "/media-library/annotate", {
+    method: "POST",
+    json: body,
+    timeoutMs: 120000,
+  });
+  return ok(res, 200);
+}
+
+export async function listMediaAnnotations(baseUrl, assetId) {
+  const res = await request(baseUrl, `/media-library/${encodeURIComponent(assetId)}/annotations`);
+  return ok(res, 200).annotations || [];
+}
+
 // Deliver the user's answer to a pending `ask_question` (elicit) back to the
 // session loop. Mirrors the web client (static/v3/v3.js showAskModal submit):
 //   POST /sessions/{id}/ask_response  { question_id, answers }

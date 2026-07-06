@@ -10,6 +10,8 @@ export const COMMANDS = [
   { name: "open", desc: "Open an asset in the system viewer: /open <asset_id>", arg: "<asset_id>" },
   { name: "preview", desc: "Open the preview window for this session in your browser" },
   { name: "timeline", desc: "Show the current project timeline" },
+  { name: "annotate", desc: "Annotate media-library videos: /annotate <asset_id|all>", arg: "<asset_id|all>" },
+  { name: "annotations", desc: "List media-library annotations: /annotations [asset_id]", arg: "[asset_id]" },
   { name: "session", desc: "Show session id, server, and connection state" },
   { name: "retry", desc: "Reconnect to the server / recreate the session" },
   { name: "login", desc: "Sign in with your Google account" },

@@ -12,6 +12,9 @@ import {
   submitTurn,
   submitAskResponse,
   listAssets,
+  listMediaLibrary,
+  annotateMediaLibrary,
+  listMediaAnnotations,
   getTimeline,
   closeSession,
   uploadAsset,
@@ -494,6 +497,12 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       case "timeline":
         await doTimeline();
         break;
+      case "annotate":
+        await doAnnotate(arg);
+        break;
+      case "annotations":
+        await doAnnotations(arg);
+        break;
       default:
         pushNotice("error", `unknown command: /${name}`, ["/help lists commands"]);
     }
@@ -630,6 +639,52 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       pushNotice("info", `timeline (${(tl.tracks || []).length} track(s))`, lines);
     } catch (e) {
       pushNotice("error", `could not load timeline: ${e.message}`);
+    }
+  };
+
+  const doAnnotate = async (arg) => {
+    const a = (arg || "").trim();
+    if (!a) return pushNotice("error", "usage: /annotate <asset_id|all>");
+    try {
+      const body = a.toLowerCase() === "all"
+        ? { all: true, kind: "video", mode: "quick", max_assets: 20, language: "auto" }
+        : { asset_ids: [a], mode: "quick", language: "auto" };
+      pushNotice("info", a.toLowerCase() === "all" ? "annotating media library videos…" : `annotating ${a} …`);
+      renderNow();
+      const out = await annotateMediaLibrary(serverUrl, body);
+      const lines = (out.results || []).map((r) => `${r.asset_id}: ${r.annotation_count || 0} marker(s)`);
+      pushNotice("success", `annotated ${out.asset_count || 0} asset(s)`, lines);
+    } catch (e) {
+      pushNotice("error", `annotate failed: ${e.message}`);
+    }
+  };
+
+  const doAnnotations = async (arg) => {
+    const a = (arg || "").trim();
+    try {
+      if (!a) {
+        const assets = await listMediaLibrary(serverUrl, { kind: "video", limit: 20 });
+        if (!assets.length) return pushNotice("info", "no media-library video assets");
+        const lines = assets.map((asset) => {
+          const summary = asset.annotation_summary || {};
+          const tags = (summary.tags || []).slice(0, 4).join(", ");
+          return `${asset.asset_id}  ${summary.count || 0} mark(s)  ${asset.name || ""}${tags ? `  [${tags}]` : ""}`;
+        });
+        pushNotice("info", "media annotations", lines);
+        return;
+      }
+      const anns = await listMediaAnnotations(serverUrl, a);
+      if (!anns.length) return pushNotice("info", `no annotations on ${a}`);
+      const lines = anns.map((ann) => {
+        const range = ann.scope === "time_range"
+          ? `${Number(ann.start_sec || 0).toFixed(1)}-${Number(ann.end_sec || 0).toFixed(1)}s`
+          : ann.scope;
+        const tags = (ann.tags || []).slice(0, 4).join(", ");
+        return `${range}  ${ann.label}${tags ? `  [${tags}]` : ""}${ann.note ? ` — ${ann.note}` : ""}`;
+      });
+      pushNotice("info", `${anns.length} annotation(s) on ${a}`, lines);
+    } catch (e) {
+      pushNotice("error", `could not load annotations: ${e.message}`);
     }
   };
 
