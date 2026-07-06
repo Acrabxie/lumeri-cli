@@ -222,7 +222,8 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         break;
       }
       case "timeline_op":
-        break; // project timeline changed; surfaced on demand via /timeline
+        refreshTimelineNotice(ev);
+        break;
       case "replay_gap": {
         // The terminal event of the in-flight turn may have been evicted from
         // the server's bounded replay buffer (sse.py REPLAY_BUFFER_SIZE=200),
@@ -264,8 +265,8 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         break;
       }
       case "turn_wrapup": {
-        // Graceful stop (circuit-breaker / budget exhaustion / doom loop /
-        // stream error). Informational — NOT an error — so surface the
+        // Graceful stop (budget exhaustion / doom loop / stream error).
+        // Informational — NOT an error — so surface the
         // synthesized summary and end the turn like turn_complete. Mirrors the
         // web client (static/v3/v3.js turn_wrapup handler).
         const t = ensureCurrent();
@@ -583,6 +584,22 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     openExternal(url, "preview");
     pushNotice("success", "preview window opened", [url]);
     renderNow();
+  };
+
+  const refreshTimelineNotice = async (ev = {}) => {
+    if (!m.sessionId) return;
+    try {
+      const tl = await getTimeline(serverUrl, m.sessionId);
+      const tracks = Array.isArray(tl.tracks) ? tl.tracks : [];
+      const clipCount = tracks.reduce((sum, track) => sum + (Array.isArray(track.clips) ? track.clips.length : 0), 0);
+      const seq = ev.seq ?? tl.patch_seq ?? "?";
+      pushNotice("success", `timeline updated · ${clipCount} clip(s)`, [
+        `${tracks.length} track(s) · seq ${seq}`,
+      ]);
+      renderNow();
+    } catch {
+      // The explicit /timeline command still gives the user a manual retry path.
+    }
   };
 
   const doOpen = (id) => {

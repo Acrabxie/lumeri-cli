@@ -31,6 +31,7 @@ async function script() {
     call_id: "c1",
     result: { summary: "Applied warm grade", asset_id: "v_002", kind: "video" },
   });
+  send("timeline_op", { seq: 3, ops: ["insert_clip"], clip_count: 1 });
   send("model_tool_call_start", { call_id: "c2", tool_name: "generate_video" });
   send("tool_exec_start", { call_id: "c2" });
   await sleep(60);
@@ -58,6 +59,17 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (method === "GET" && /\/sessions\/[^/]+$/.test(url)) return j(200, { session_id: "v3-t", assets: [], latest_event_id: eid });
+  if (method === "GET" && /\/sessions\/[^/]+\/timeline$/.test(url)) {
+    return j(200, {
+      session_id: "v3-t",
+      patch_seq: 3,
+      duration: 2,
+      fps: 30,
+      width: 1920,
+      height: 1080,
+      tracks: [{ id: "V1", kind: "video", name: "Video 1", clips: [{ id: "c1", name: "clip.mp4", start: 0, duration: 2 }] }],
+    });
+  }
   if (method === "GET" && url.includes("/assets")) return j(200, { assets: [] });
   if (method === "POST" && url.includes("/turn")) {
     req.resume();
@@ -93,6 +105,7 @@ const must = [
   ["progress percent", "90%"],
   ["result summary", "Applied warm grade"],
   ["asset chip", "[v_002"],
+  ["timeline update notice", "timeline updated · 1 clip(s)"],
   ["error code", "E_NOT_IMPLEMENTED"],
   ["valid options", "valid: edit_video"],
   ["final deliverable", "produced: v_002"],
