@@ -1,6 +1,8 @@
-// TUI email-code sign-in regression. Boots an inline mock that speaks the auth
-// contract and drives the App through /login → email → code → signed in,
-// asserting each state renders. Mirrors smoke.mjs's harness.
+// Login regression. Boots an inline mock that speaks the auth contract and
+// drives both supported TUI paths:
+//   /login       -> opens the browser deep-link login window
+//   /login email -> terminal email-code flow
+// Mirrors smoke.mjs's harness.
 import http from "node:http";
 import { render } from "ink-testing-library";
 import { html } from "../src/html.js";
@@ -66,6 +68,10 @@ await sleep(500); // init: health → session → SSE → /auth/session
 stdin.write("/login");
 await sleep(40);
 stdin.write("\r");
+await sleep(250); // browser-login notice
+stdin.write("/login email");
+await sleep(40);
+stdin.write("\r");
 await sleep(250); // pendingLogin: ask for the email
 stdin.write("tester@demo.dev");
 await sleep(40);
@@ -79,6 +85,8 @@ await sleep(500); // verifyEmailLogin → signed in
 const all = frames.join("\n");
 const fail = [];
 const must = [
+  ["browser login", "opening login page in your browser"],
+  ["browser deep link", "/v3/?login=1"],
   ["email prompt", "sign in with an email code"],
   ["code sent", "code sent to tester@demo.dev"],
   ["signed in", "signed in as tester@demo.dev"],

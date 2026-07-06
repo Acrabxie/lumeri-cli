@@ -14,7 +14,7 @@ export const COMMANDS = [
   { name: "annotations", desc: "List media-library annotations: /annotations [asset_id]", arg: "[asset_id]" },
   { name: "session", desc: "Show session id, server, and connection state" },
   { name: "retry", desc: "Reconnect to the server / recreate the session" },
-  { name: "login", desc: "Sign in with your Google account" },
+  { name: "login", desc: "Sign in: opens browser, or /login email / /login google" },
   { name: "logout", desc: "Sign out of the current account" },
   { name: "account", desc: "Show or switch account: /account [switch <#|id>]", arg: "[switch <#|id>]" },
   { name: "cancel", desc: "Dismiss a pending question from Lumeri", hidden: true },

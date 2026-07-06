@@ -126,7 +126,7 @@ Covered by `test/providers.mjs` (in `npm test`).
 | `/annotations [asset_id]` | List media-library annotations |
 | `/session` | Session id, server, connection state |
 | `/retry` | Reconnect / recreate the session |
-| `/login [google]` | Sign in — emailed code, or `/login google` for Google |
+| `/login` | Sign in — opens the web login page; `/login email` / `/login google` |
 | `/logout` | Sign out of the current account |
 | `/account [switch <#\|id>]` | Show the active account / roster, or switch |
 | `/quit` | Exit |

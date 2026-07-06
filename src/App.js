@@ -698,19 +698,62 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     }
   };
 
-  // /login          → interactive email-code sign-in
-  // /login <email>   → email-code sign-in for that address
-  // /login google    → browser Google sign-in
+  // /login          → open the web login dialog (?login=1)
+  // /login email    → interactive email-code sign-in in the TUI
+  // /login <email>  → email-code sign-in for that address
+  // /login google   → browser Google sign-in
   const doLogin = async (arg) => {
     const a = (arg || "").trim();
     if (a.toLowerCase() === "google") return doGoogleLogin();
+    if (a.toLowerCase() === "email") {
+      m.pendingLogin = { step: "email" };
+      pushNotice("info", "sign in with an email code", [
+        "type your email address and press enter",
+        "or /login google to use Google · /cancel to abort",
+      ]);
+      renderNow();
+      return;
+    }
     if (a.includes("@")) return beginEmailLogin(a);
-    m.pendingLogin = { step: "email" };
-    pushNotice("info", "sign in with an email code", [
-      "type your email address and press enter",
-      "or /login google to use Google · /cancel to abort",
+
+    const url = new URL("/v3/", serverUrl);
+    url.searchParams.set("login", "1");
+    const prevId = m.account?.account_id || null;
+    pushNotice("info", "opening login page in your browser…", [
+      url.toString(),
+      "sign in there, then come back — this view updates automatically",
     ]);
     renderNow();
+    openExternal(url.toString(), "Login page");
+
+    cancelLoginPoll();
+    const token = m.loginSeq;
+    const deadline = Date.now() + 5 * 60 * 1000;
+    const poll = async () => {
+      if (token !== m.loginSeq) return;
+      let acct = null;
+      try {
+        acct = (await getSession(serverUrl)).account || null;
+      } catch {}
+      if (token !== m.loginSeq) return;
+      if (acct && acct.account_id && acct.account_id !== prevId) {
+        m.account = acct;
+        m.loginPoll = null;
+        pushNotice("success", `signed in as ${accountLabel(acct)}`);
+        renderNow();
+        return;
+      }
+      if (Date.now() > deadline) {
+        m.loginPoll = null;
+        pushNotice("info", "still waiting on the browser sign-in", [
+          "finish in the browser, then run /account to check",
+        ]);
+        renderNow();
+        return;
+      }
+      m.loginPoll = setTimeout(poll, 1500);
+    };
+    m.loginPoll = setTimeout(poll, 1500);
   };
 
   // Mail a code to `email` and switch the prompt into code-entry mode.
