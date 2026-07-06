@@ -37,6 +37,17 @@ export function autocompleteState(line) {
   return { frag, matches };
 }
 
+// Scrolling window for the autocomplete menu: shift the previous window just
+// enough to keep the selected row visible, clamped to the list bounds. Pure so
+// the menu can offer every match (a bare "/" lists all commands) while only
+// `max` rows are on screen at once.
+export function menuScroll(total, sel, prevStart, max) {
+  let start = Math.max(0, Math.min(prevStart, total - max));
+  if (sel < start) start = sel;
+  else if (sel >= start + max) start = sel - max + 1;
+  return start;
+}
+
 // Parse a submitted slash line into {name, arg}. Returns null if not a slash.
 export function parseSlash(line) {
   const trimmed = line.trim();

@@ -2,7 +2,7 @@ import { Box, Text, useInput } from "ink";
 import { useState, useRef } from "react";
 import { html } from "../html.js";
 import { color, glyph } from "../theme.js";
-import { autocompleteState } from "../slash.js";
+import { autocompleteState, menuScroll } from "../slash.js";
 
 const PLACEHOLDER = "Send a message to Lumeri…  (/help for commands)";
 const ANSWER_PLACEHOLDER = "Type your answer to Lumeri…  (/cancel to dismiss)";
@@ -16,9 +16,16 @@ export function InputBox({ onSubmit, history, answerMode = false }) {
   const draft = useRef("");
   const escCleared = useRef(false); // true right after Esc wiped the line
 
+  const winStart = useRef(0); // first visible row of the autocomplete menu
+
   const ac = autocompleteState(text);
-  const matches = ac ? ac.matches.slice(0, MENU_MAX) : [];
+  const matches = ac ? ac.matches : [];
   const selClamped = matches.length ? Math.min(sel, matches.length - 1) : 0;
+  winStart.current = matches.length
+    ? menuScroll(matches.length, selClamped, winStart.current, MENU_MAX)
+    : 0;
+  const visible = matches.slice(winStart.current, winStart.current + MENU_MAX);
+  const hiddenBelow = matches.length - winStart.current - visible.length;
 
   const setBoth = (t, c) => {
     setText(t);
@@ -48,7 +55,10 @@ export function InputBox({ onSubmit, history, answerMode = false }) {
         setBoth(text.slice(0, -1) + "\n", text.length);
         return;
       }
-      const value = text;
+      // Menu open → Enter runs the highlighted command, so a bare "/" or a
+      // fragment like "/log" resolves to what's on screen instead of being
+      // submitted raw and bouncing as an unknown command.
+      const value = matches.length ? `/${matches[selClamped].name}` : text;
       if (!value.trim()) return;
       onSubmit(value);
       setBoth("", 0);
@@ -59,6 +69,9 @@ export function InputBox({ onSubmit, history, answerMode = false }) {
     }
 
     if (key.tab) {
+      // shift+tab belongs to App (plan-mode toggle) — Ink broadcasts every
+      // keypress to all useInput hooks, so just don't act on it here.
+      if (key.shift) return;
       if (matches.length) {
         const filled = `/${matches[selClamped].name} `;
         setBoth(filled, filled.length);
@@ -197,14 +210,20 @@ export function InputBox({ onSubmit, history, answerMode = false }) {
     </${Box}>
     ${matches.length
       ? html`<${Box} flexDirection="column" marginLeft=${2}>
-          ${matches.map(
+          ${winStart.current > 0
+            ? html`<${Text} color=${color.muted}>${`↑ ${winStart.current} more`}</${Text}>`
+            : null}
+          ${visible.map(
             (c, idx) => html`<${Box} key=${c.name}>
-              <${Text} color=${idx === selClamped ? color.brand : color.muted} bold=${idx === selClamped}>
+              <${Text} color=${winStart.current + idx === selClamped ? color.brand : color.muted} bold=${winStart.current + idx === selClamped}>
                 ${"/" + c.name + (c.arg ? " " + c.arg : "")}
               </${Text}>
               <${Text} color=${color.muted}>${"  " + c.desc}</${Text}>
             </${Box}>`,
           )}
+          ${hiddenBelow > 0
+            ? html`<${Text} color=${color.muted}>${`↓ ${hiddenBelow} more`}</${Text}>`
+            : null}
         </${Box}>`
       : null}
   </${Box}>`;
