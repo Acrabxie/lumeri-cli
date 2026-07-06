@@ -7,7 +7,7 @@
 // stores a token — it kicks off the flow and reads who is signed in.
 import readline from "node:readline";
 import { stdin, stdout } from "node:process";
-import { spawn } from "node:child_process";
+import { openInBrowser } from "./open.js";
 import { health } from "./api.js";
 import {
   getSession,
@@ -30,24 +30,11 @@ Usage:
 Options:
   -s, --server <url>           Lumeri sidecar URL
                                (default: $LUMERI_SERVER or http://127.0.0.1:7788)
+      --no-browser             Print sign-in URLs instead of opening the browser
+                               (also: $LUMERI_NO_BROWSER=1)
 `;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function openBrowser(url) {
-  const cmd =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  try {
-    const child = spawn(cmd, [url], {
-      stdio: "ignore",
-      detached: true,
-      shell: process.platform === "win32",
-    });
-    child.unref();
-  } catch {
-    /* not fatal — the URL is printed for the user to open manually */
-  }
-}
 
 // Line reader that works for both a TTY (interactive) and a pipe (scripts/tests).
 // question() resolves to the next line, or null at end-of-input — callers treat
@@ -122,8 +109,10 @@ async function googleLogin(baseUrl) {
     return 1;
   }
   const prevId = await currentId(baseUrl);
-  process.stdout.write(`Opening your browser to sign in with Google…\n  ${url}\nWaiting for you to approve…\n`);
-  openBrowser(url);
+  const opened = openInBrowser(url);
+  process.stdout.write(
+    `${opened ? "Opening your browser to sign in with Google…" : "Open this URL to sign in with Google:"}\n  ${url}\nWaiting for you to approve…\n`,
+  );
   const acct = await pollUntilSignedIn(baseUrl, prevId);
   if (!acct) {
     process.stdout.write(
@@ -191,6 +180,7 @@ export async function run(argv) {
     const a = argv[i];
     if (a === "-s" || a === "--server") baseUrl = argv[++i];
     else if (a.startsWith("--server=")) baseUrl = a.slice("--server=".length);
+    else if (a === "--no-browser") process.env.LUMERI_NO_BROWSER = "1";
     else rest.push(a);
   }
 

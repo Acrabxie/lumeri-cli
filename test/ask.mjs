@@ -5,6 +5,7 @@
 // handled quietly (no "unknown event"). Drives the REAL App SSE dispatch path
 // (same as smoke.mjs), plus a unit check of the pure src/ask.js helpers.
 // Run: node test/ask.mjs
+process.env.LUMERI_NO_BROWSER = "1"; // never pop a real browser from a test run
 import http from "node:http";
 import assert from "node:assert/strict";
 import { render } from "ink-testing-library";

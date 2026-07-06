@@ -2,6 +2,7 @@
 // Plain stdout (no Ink) so it composes in scripts.
 import { createCodexProvider } from "./provider.js";
 import { DEFAULT_MODEL } from "./constants.js";
+import { browserOpenDisabled } from "../open.js";
 
 const HELP = `lumeri codex — use your ChatGPT subscription's Codex quota
 
@@ -24,6 +25,14 @@ function fmtPlan(p) {
 }
 
 export async function run(argv) {
+  // --no-browser anywhere on the line → print sign-in URLs instead of opening.
+  argv = argv.filter((a) => {
+    if (a === "--no-browser") {
+      process.env.LUMERI_NO_BROWSER = "1";
+      return false;
+    }
+    return true;
+  });
   const sub = argv[0];
   const provider = createCodexProvider();
 
@@ -54,10 +63,11 @@ export async function run(argv) {
       }
 
       case "login": {
-        process.stdout.write("Opening browser for ChatGPT sign-in…\n");
+        const headless = browserOpenDisabled();
+        process.stdout.write(headless ? "ChatGPT sign-in (browser auto-open is off):\n" : "Opening browser for ChatGPT sign-in…\n");
         const s = await provider.login({
           onUrl: (url) =>
-            process.stdout.write(`If it didn't open, visit:\n  ${url}\n\nWaiting for authorization…\n`),
+            process.stdout.write(`${headless ? "Visit:" : "If it didn't open, visit:"}\n  ${url}\n\nWaiting for authorization…\n`),
         });
         process.stdout.write(`✅ Signed in as ${s.email || "?"} (${fmtPlan(s.plan)} plan).\n`);
         return 0;

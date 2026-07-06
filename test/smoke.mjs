@@ -1,6 +1,7 @@
 // Headless render regression test. Boots an inline mock v3 server, drives the
 // App through one scripted turn, and asserts the key UI states render.
 // Run: npm test
+process.env.LUMERI_NO_BROWSER = "1"; // never pop a real browser from a test run
 import http from "node:http";
 import { render } from "ink-testing-library";
 import { html } from "../src/html.js";

@@ -1,6 +1,6 @@
 import { Box, Static, useApp, useInput } from "ink";
 import { useEffect, useReducer, useRef, useState, useCallback } from "react";
-import { execFile } from "node:child_process";
+import { browserOpenDisabled, openInBrowser } from "./open.js";
 import { html } from "./html.js";
 import { color } from "./theme.js";
 import { pickStatusWord } from "./spinner.js";
@@ -644,16 +644,13 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     }
   };
 
-  // Open a URL in the system browser via argv exec (execFile) — no shell parses
-  // the URL, so there is no command-injection surface.
+  // Open a URL in the system browser (src/open.js owns the how). Returns
+  // false when auto-open is off (--no-browser / $LUMERI_NO_BROWSER) — callers
+  // adjust their notice so we never claim a window opened when none did.
   const openExternal = (url, label) => {
-    const bin = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-    const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-    execFile(bin, args, (err) => {
-      if (err) {
-        addLog({ type: "notice", id: nextId(), tone: "error", title: `could not open ${label || url}: ${err.message}`, lines: [url] });
-        scheduleRender();
-      }
+    return openInBrowser(url, (err) => {
+      addLog({ type: "notice", id: nextId(), tone: "error", title: `could not open ${label || url}: ${err.message}`, lines: [url] });
+      scheduleRender();
     });
   };
 
@@ -676,8 +673,11 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       return;
     }
     const url = previewUrl(serverUrl, m.sessionId);
-    openExternal(url, "preview");
-    pushNotice("success", "preview window opened", [url]);
+    if (openExternal(url, "preview")) {
+      pushNotice("success", "preview window opened", [url]);
+    } else if (force) {
+      pushNotice("info", "browser auto-open is off — open the preview yourself", [url]);
+    }
     renderNow();
   };
 
@@ -705,8 +705,9 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     if (!/^[A-Za-z0-9_.-]+$/.test(id)) {
       return pushNotice("error", `invalid asset id: ${id}`, ["expected characters: A–Z a–z 0–9 _ . -"]);
     }
-    openExternal(assetUrl(serverUrl, m.sessionId, id), id);
-    pushNotice("success", `opening ${id}`, [assetUrl(serverUrl, m.sessionId, id)]);
+    const url = assetUrl(serverUrl, m.sessionId, id);
+    if (openExternal(url, id)) pushNotice("success", `opening ${id}`, [url]);
+    else pushNotice("info", `browser auto-open is off — open ${id} yourself`, [url]);
   };
 
   const doTimeline = async () => {
@@ -805,12 +806,13 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     const url = new URL("/v3/", serverUrl);
     url.searchParams.set("login", "1");
     const prevId = m.account?.account_id || null;
-    pushNotice("info", "opening login page in your browser…", [
+    const headless = browserOpenDisabled();
+    pushNotice("info", headless ? "open the login page in your browser" : "opening login page in your browser…", [
       url.toString(),
       "sign in there, then come back — this view updates automatically",
     ]);
     renderNow();
-    openExternal(url.toString(), "Login page");
+    if (!headless) openExternal(url.toString(), "Login page");
 
     cancelLoginPoll();
     const token = m.loginSeq;
@@ -916,12 +918,13 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     const url = start.authorization_url;
     if (!url) return pushNotice("error", "server did not return a sign-in URL");
     const prevId = m.account?.account_id || null;
-    pushNotice("info", "opening your browser to sign in with Google…", [
+    const headless = browserOpenDisabled();
+    pushNotice("info", headless ? "open this URL to sign in with Google" : "opening your browser to sign in with Google…", [
       url,
       "approve there, then come back — this view updates automatically",
     ]);
     renderNow();
-    openExternal(url, "Google sign-in");
+    if (!headless) openExternal(url, "Google sign-in");
 
     // The backend handles the loopback callback and flips active.json; we just
     // poll /auth/session until the active account changes (or we give up).

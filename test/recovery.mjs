@@ -1,6 +1,7 @@
 // Regression test for the post-review fixes: replay_gap recovery (busy must
 // unwedge), FIFO queueing of messages typed while busy, and /open asset-id
 // validation. Run: node test/recovery.mjs
+process.env.LUMERI_NO_BROWSER = "1"; // never pop a real browser from a test run
 import http from "node:http";
 import { render } from "ink-testing-library";
 import { html } from "../src/html.js";
@@ -104,7 +105,8 @@ const must = [
   ["gap recovery banner", "missed 3 event(s)"],
   ["post-gap turn ran", "echo:after-gap"],
   ["open rejects bad id", "invalid asset id"],
-  ["open accepts good id", "opening v_002"],
+  // Headless (LUMERI_NO_BROWSER) wording — proves no `open` was spawned.
+  ["open accepts good id", "open v_002 yourself"],
 ];
 const order = ["echo:msg-one", "echo:msg-two", "echo:msg-three"];
 let lastIdx = -1;

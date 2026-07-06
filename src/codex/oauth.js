@@ -3,8 +3,8 @@
 // auth.openai.com, catch the redirect on a loopback server at :1455, exchange
 // the code for tokens. No cookie scraping, no headless simulation.
 import http from "node:http";
-import { spawn } from "node:child_process";
 import { URL } from "node:url";
+import { openInBrowser } from "../open.js";
 import {
   CLIENT_ID,
   OAUTH_AUTHORIZE_URL,
@@ -82,15 +82,10 @@ function waitForCode({ state, timeoutMs = 300000 }) {
 }
 
 export function openBrowser(url) {
-  const cmd =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  try {
-    const child = spawn(cmd, [url], { stdio: "ignore", detached: true, shell: process.platform === "win32" });
-    child.unref();
-    return true;
-  } catch {
-    return false;
-  }
+  // Shared doorway (src/open.js) — honors --no-browser / $LUMERI_NO_BROWSER.
+  // The onUrl callback in browserLogin already printed the URL, so a
+  // suppressed open still leaves the user a manual path.
+  return openInBrowser(url);
 }
 
 export async function exchangeCode({ code, verifier }) {

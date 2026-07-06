@@ -29,6 +29,7 @@ function parseArgs(argv) {
     else if (a.startsWith("--server=")) opts.server = a.slice("--server=".length);
     else if (a === "--no-splash") opts.splash = false;
     else if (a === "--no-preview") opts.preview = false;
+    else if (a === "--no-browser") process.env.LUMERI_NO_BROWSER = "1"; // src/open.js reads this
     else {
       process.stderr.write(`lumeri: unknown argument: ${a}\n`);
       process.exit(2);
@@ -49,6 +50,7 @@ Options
   -s, --server <url>   Lumeri sidecar base URL (default: ${DEFAULT_SERVER})
       --no-splash      Skip the startup animation
       --no-preview     Don't auto-open the preview window
+      --no-browser     Never launch a browser — print URLs instead
   -V, --version        Print version and exit
   -h, --help           Show this help
 
@@ -56,6 +58,7 @@ Environment
   LUMERI_SERVER        Default server URL if --server is not given
   LUMERI_NO_SPLASH     Set to 1 to skip the startup animation
   LUMERI_NO_PREVIEW    Set to 1 to not auto-open the preview window
+  LUMERI_NO_BROWSER    Set to 1 to never launch a browser (URLs are printed)
 
 Inside the TUI
   /help                Show commands and shortcuts

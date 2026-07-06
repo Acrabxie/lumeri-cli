@@ -1,8 +1,9 @@
 // Login regression. Boots an inline mock that speaks the auth contract and
 // drives both supported TUI paths:
-//   /login       -> opens the browser deep-link login window
+//   /login       -> shows the browser deep-link login URL
 //   /login email -> terminal email-code flow
 // Mirrors smoke.mjs's harness.
+process.env.LUMERI_NO_BROWSER = "1"; // never pop a real browser from a test run
 import http from "node:http";
 import { render } from "ink-testing-library";
 import { html } from "../src/html.js";
@@ -85,7 +86,8 @@ await sleep(500); // verifyEmailLogin → signed in
 const all = frames.join("\n");
 const fail = [];
 const must = [
-  ["browser login", "opening login page in your browser"],
+  // Headless (LUMERI_NO_BROWSER) wording — proves no `open` was spawned.
+  ["browser login", "open the login page in your browser"],
   ["browser deep link", "/v3/?login=1"],
   ["email prompt", "sign in with an email code"],
   ["code sent", "code sent to tester@demo.dev"],
