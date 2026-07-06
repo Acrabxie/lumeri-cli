@@ -5,6 +5,7 @@ import { html } from "./html.js";
 import { color } from "./theme.js";
 import { pickStatusWord } from "./spinner.js";
 import { inferKind, humanBytes, formatClipLine } from "./format.js";
+import { PROTOCOL_VERSION } from "./contract.js";
 import {
   health,
   createSession,
@@ -247,6 +248,18 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       case "timeline_op":
         refreshTimelineNotice(ev);
         break;
+      case "protocol_hello": {
+        // Per-connection id-less frame at the top of every SSE stream. A
+        // mismatch means this CLI's vendored contract is older/newer than the
+        // server — warn once, keep working (unknown kinds banner anyway).
+        if (ev.protocol_version !== PROTOCOL_VERSION && !m.protocolWarned) {
+          m.protocolWarned = true;
+          pushNotice("info", `协议版本不一致：服务器 v${ev.protocol_version} · CLI v${PROTOCOL_VERSION}`, [
+            "部分事件可能以横幅形式显示——升级 lumeri-cli 或服务器可消除",
+          ]);
+        }
+        break;
+      }
       case "replay_gap": {
         // The terminal event of the in-flight turn may have been evicted from
         // the server's bounded replay buffer (sse.py REPLAY_BUFFER_SIZE=200),
@@ -318,7 +331,8 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       }
       case "ask_question": {
         // The agent paused on an `elicit` call: stash the question and flip the
-        // input into ANSWER mode. Mirrors the web client (showAskModal).
+        // input into ANSWER mode. (Web is display-only here — the CLI is the
+        // answering client; see gemia docs/protocol-parity-plan.md.)
         const pending = toPendingAsk(ev.question);
         if (pending) {
           m.pendingAsk = pending;
