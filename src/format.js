@@ -89,3 +89,18 @@ export function toolLabel(name) {
   if (!name) return "tool";
   return TOOL_LABELS[name] || name;
 }
+
+// One /timeline line per clip. The transition tail renders lumerai's
+// clip.transition (payload key for transition_after) so a dissolve the model
+// added is actually visible in the CLI; export still hard-cuts until xfade
+// lands (gemia docs/timeline-canonical-plan.md), hence the parenthetical.
+export function formatClipLine(clip) {
+  const start = Number(clip.start || 0).toFixed(2);
+  const dur = Number(clip.duration || 0).toFixed(2);
+  let line = `   ${clip.name}  @${start}s +${dur}s`;
+  const t = clip.transition;
+  if (t && t.kind && t.kind !== "cut") {
+    line += `  ⇄ ${t.kind} ${Number(t.duration_sec || 0).toFixed(2)}s (预览标记，导出暂为硬切)`;
+  }
+  return line;
+}

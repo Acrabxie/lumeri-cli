@@ -1,7 +1,7 @@
 // Unit test for toolLabel() friendly labels — focuses on the NEW lumenframe
 // time tools/ops (parity with the server) plus the unmapped passthrough
 // contract. Run: node test/format-labels.mjs
-import { toolLabel } from "../src/format.js";
+import { toolLabel, formatClipLine } from "../src/format.js";
 
 const fail = [];
 
@@ -56,6 +56,20 @@ for (const name of ["read_file", "write_file", "remember", "log_note"]) {
 // Empty/missing name keeps its sensible default.
 if (toolLabel("") !== "tool" || toolLabel(undefined) !== "tool") {
   fail.push("empty name should fall back to \"tool\"");
+}
+
+// formatClipLine: transition tail appears only for real transitions.
+const plain = formatClipLine({ name: "a.mp4", start: 0, duration: 5 });
+if (plain !== "   a.mp4  @0.00s +5.00s") {
+  fail.push(`formatClipLine plain: got ${JSON.stringify(plain)}`);
+}
+const cut = formatClipLine({ name: "a.mp4", start: 0, duration: 5, transition: { kind: "cut" } });
+if (cut.includes("⇄")) {
+  fail.push("formatClipLine: 'cut' must not render a transition tail");
+}
+const diss = formatClipLine({ name: "a.mp4", start: 1.5, duration: 3, transition: { kind: "dissolve", duration_sec: 0.5 } });
+if (!diss.includes("⇄ dissolve 0.50s") || !diss.includes("硬切")) {
+  fail.push(`formatClipLine dissolve: got ${JSON.stringify(diss)}`);
 }
 
 if (fail.length) {

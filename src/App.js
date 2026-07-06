@@ -4,7 +4,7 @@ import { browserOpenDisabled, openInBrowser } from "./open.js";
 import { html } from "./html.js";
 import { color } from "./theme.js";
 import { pickStatusWord } from "./spinner.js";
-import { inferKind, humanBytes } from "./format.js";
+import { inferKind, humanBytes, formatClipLine } from "./format.js";
 import {
   health,
   createSession,
@@ -720,7 +720,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       for (const track of tl.tracks || []) {
         lines.push(`[${track.kind}] ${track.name} — ${track.clips.length} clip(s)`);
         for (const clip of track.clips) {
-          lines.push(`   ${clip.name}  @${clip.start.toFixed(2)}s +${clip.duration.toFixed(2)}s`);
+          lines.push(formatClipLine(clip));
         }
       }
       pushNotice("info", `timeline (${(tl.tracks || []).length} track(s))`, lines);
