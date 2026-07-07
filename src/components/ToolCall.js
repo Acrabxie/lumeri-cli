@@ -21,9 +21,68 @@ const STATUS_COLOR = {
   pending: color.muted,
   running: color.brand,
   done: color.success,
+  ok: color.success,
   failed: color.error,
+  error: color.error,
   gated: color.warn,
+  timeout: color.warn,
+  cancelled: color.warn,
+  needs_user: color.warn,
 };
+
+// Multi-agent fan-out: render a spawn_subtasks call's children indented beneath
+// it. Each child is a group ("  ├─ sub_1 [annotate] ok") with its own tool
+// lines and a summary. Web parity: static/v3/v3.js renderSubagents.
+function Subagents({ call }) {
+  if (!call.children || !call.childOrder || !call.childOrder.length) return null;
+  const groups = call.childOrder.map((agentId, gi) => {
+    const child = call.children.get(agentId);
+    if (!child) return null;
+    const statusColor = STATUS_COLOR[child.status] || color.muted;
+    const meta = [];
+    if (typeof child.steps === "number") meta.push(`${child.steps} steps`);
+    if (typeof child.spentUsd === "number") meta.push(`$${child.spentUsd}`);
+    if (typeof child.spentSeconds === "number") meta.push(`${child.spentSeconds}s`);
+    const lines = [];
+    lines.push(
+      html`<${Box} key="head">
+        <${Text} color=${color.muted}>${"  ├─ "}</${Text}>
+        <${Text} bold color=${color.brand}>${child.agent_id}</${Text}>
+        <${Text} color=${color.muted}>${" [" + (child.profile || "?") + "] "}</${Text}>
+        <${Text} color=${statusColor}>${child.status}</${Text}>
+        ${meta.length ? html`<${Text} color=${color.muted}>${"  " + meta.join(" · ")}</${Text}>` : null}
+      </${Box}>`,
+    );
+    (child.callOrder || []).forEach((k, ci) => {
+      const c = child.calls.get(k);
+      if (!c) return;
+      const detail = c.status === "done"
+        ? truncate(c.summary || "done", 120)
+        : c.status === "failed"
+          ? truncate(c.error || "failed", 120)
+          : c.progress?.message || c.status;
+      lines.push(
+        html`<${Box} key=${"c" + ci}>
+          <${Text} color=${color.muted}>${"  │   " + glyph.branch + " "}</${Text}>
+          <${Text} color=${color.tool}>${toolLabel(c.tool_name)}</${Text}>
+          <${Text} color=${color.muted}>${" — " + truncate(detail, 120)}</${Text}>
+        </${Box}>`,
+      );
+    });
+    if (child.summary) {
+      lines.push(
+        html`<${Box} key="sum"><${Text} color=${color.muted}>${"  │   " + truncate(child.summary, 200)}</${Text}></${Box}>`,
+      );
+    }
+    if (Array.isArray(child.assetIds) && child.assetIds.length) {
+      lines.push(
+        html`<${Box} key="assets"><${Text} color=${color.muted}>${"  │   assets: " + child.assetIds.join(", ")}</${Text}></${Box}>`,
+      );
+    }
+    return html`<${Box} key=${"g" + gi} flexDirection="column">${lines}</${Box}>`;
+  });
+  return html`<${Box} flexDirection="column">${groups}</${Box}>`;
+}
 
 export function ToolCall({ call, tick }) {
   const bulletColor = STATUS_COLOR[call.status] || color.muted;
@@ -97,5 +156,6 @@ export function ToolCall({ call, tick }) {
       ${argStr ? html`<${Text} color=${color.muted}>${"(" + argStr + ")"}</${Text}>` : null}
     </${Box}>
     ${lines}
+    <${Subagents} call=${call} />
   </${Box}>`;
 }

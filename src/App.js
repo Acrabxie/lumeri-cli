@@ -137,6 +137,23 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
   };
 
   // ── SSE event handling (mirrors gemia static/v3/v3.js handlers) ───────
+  // Resolve the child tool-call state a tool_exec_* event with an agent_id
+  // belongs to. Child tool activity rides the EXISTING tool_exec_* kinds
+  // (gemia/subtasks.py) carrying { call_id: <spawn call>, agent_id, tool_call_id }.
+  const childCall = (ev) => {
+    const spawn = m.current?.callsById.get(ev.call_id);
+    const child = spawn?.children?.get(ev.agent_id);
+    if (!child) return null;
+    const key = ev.tool_call_id || ev.call_id;
+    let c = child.calls.get(key);
+    if (!c) {
+      c = { tool_call_id: key, tool_name: ev.tool_name || "tool", status: "running", progress: null, summary: null, error: null, errorCode: null };
+      child.calls.set(key, c);
+      child.callOrder.push(key);
+    }
+    return c;
+  };
+
   const handleEvent = (ev) => {
     switch (ev.kind) {
       case "turn_start": {
@@ -178,11 +195,21 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         break;
       }
       case "tool_exec_start": {
+        // agent_id present → child tool activity under a spawn_subtasks call.
+        if (ev.agent_id) { const c = childCall(ev); if (c) c.status = "running"; break; }
         const call = m.current?.callsById.get(ev.call_id);
         if (call) call.status = "running";
         break;
       }
       case "tool_exec_progress": {
+        if (ev.agent_id) {
+          const c = childCall(ev);
+          if (c) c.progress = {
+            percent: typeof ev.percent === "number" ? ev.percent : null,
+            message: ev.message || null,
+          };
+          break;
+        }
         const call = m.current?.callsById.get(ev.call_id);
         if (call) {
           call.progress = {
@@ -193,6 +220,15 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         break;
       }
       case "tool_exec_result": {
+        if (ev.agent_id) {
+          const c = childCall(ev);
+          if (c) {
+            c.status = "done";
+            c.summary = ev.result?.summary || null;
+            c.previewAssetId = ev.result?.asset_id || null;
+          }
+          break;
+        }
         const call = m.current?.callsById.get(ev.call_id);
         if (call) {
           call.status = "done";
@@ -205,6 +241,11 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         break;
       }
       case "tool_exec_error": {
+        if (ev.agent_id) {
+          const c = childCall(ev);
+          if (c) { c.status = "failed"; c.error = ev.error || "unknown error"; c.errorCode = ev.error_code || null; }
+          break;
+        }
         const call = m.current?.callsById.get(ev.call_id);
         if (call) {
           call.status = "failed";
@@ -213,6 +254,45 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
           call.recovery = ev.recovery || null;
           call.validOptions = Array.isArray(ev.valid_options) ? ev.valid_options : null;
           call.hint = ev.hint || null;
+        }
+        break;
+      }
+      case "subagent_start": {
+        // A child of a spawn_subtasks call starts — create its group under the
+        // spawn call (rendered indented beneath it; web parity: static/v3/v3.js).
+        const spawn = m.current?.callsById.get(ev.call_id);
+        if (spawn) {
+          if (!spawn.children) { spawn.children = new Map(); spawn.childOrder = []; }
+          if (!spawn.children.has(ev.agent_id)) {
+            spawn.children.set(ev.agent_id, {
+              agent_id: ev.agent_id,
+              goal: ev.goal || "",
+              profile: ev.tool_profile || "",
+              status: "running",
+              summary: null,
+              assetIds: [],
+              spentUsd: null,
+              spentSeconds: null,
+              steps: null,
+              calls: new Map(),
+              callOrder: [],
+            });
+            spawn.childOrder.push(ev.agent_id);
+          }
+        }
+        break;
+      }
+      case "subagent_result": {
+        // A child finished (any status): close its group with the terminal record.
+        const spawn = m.current?.callsById.get(ev.call_id);
+        const child = spawn?.children?.get(ev.agent_id);
+        if (child) {
+          child.status = ev.status || "ok";
+          child.summary = ev.summary || null;
+          child.assetIds = Array.isArray(ev.asset_ids) ? ev.asset_ids : [];
+          child.spentUsd = typeof ev.spent_usd === "number" ? ev.spent_usd : null;
+          child.spentSeconds = typeof ev.spent_seconds === "number" ? ev.spent_seconds : null;
+          child.steps = typeof ev.steps === "number" ? ev.steps : null;
         }
         break;
       }
