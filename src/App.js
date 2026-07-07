@@ -18,6 +18,8 @@ import {
   listMediaAnnotations,
   getTimeline,
   setPlanMode,
+  listTasks,
+  killTask,
   closeSession,
   uploadAsset,
   assetUrl,
@@ -73,6 +75,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     pendingAsk: null, // active ask_question awaiting the user's answer (elicit), or null
     pendingLogin: null, // active email-code sign-in: { step: "email"|"sending"|"code", email? }
     planMode: false, // mirrors the backend per-session plan-mode flag
+    backgroundTasks: new Map(), // job_id → background shell task (run_in_background run_shell)
   }).current;
 
   const sseRef = useRef(null);
@@ -296,6 +299,36 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         }
         break;
       }
+      case "background_task_update": {
+        // A run_in_background run_shell job changed status. These arrive both
+        // mid-turn and between turns (the server watcher runs on the session
+        // loop), so they live on m.backgroundTasks, not the current turn.
+        // Mirrors gemia static/v3/v3.js background_task_update handler.
+        if (ev.job_id) {
+          const prev = m.backgroundTasks.get(ev.job_id) || {};
+          const status = ev.status || prev.status || "running";
+          m.backgroundTasks.set(ev.job_id, {
+            job_id: ev.job_id,
+            status,
+            summary: ev.summary || prev.summary || "",
+            exit_code: typeof ev.exit_code === "number" ? ev.exit_code : (prev.exit_code ?? null),
+            elapsed_sec: typeof ev.elapsed_sec === "number" ? ev.elapsed_sec : (prev.elapsed_sec ?? null),
+          });
+          // Announce terminal transitions once (the watcher emits done/failed
+          // exactly once, but a resync replay could re-deliver it).
+          const wasTerminal = prev.status === "done" || prev.status === "failed";
+          if (!wasTerminal && (status === "done" || status === "failed")) {
+            const took = typeof ev.elapsed_sec === "number" ? ` · ${ev.elapsed_sec.toFixed(0)}s` : "";
+            if (status === "done") {
+              pushNotice("success", `后台任务完成 ${ev.job_id}（退出码 ${ev.exit_code ?? 0}）${took}`,
+                ev.summary ? [ev.summary] : []);
+            } else {
+              pushNotice("error", `后台任务失败 ${ev.job_id}${took}`, ev.summary ? [ev.summary] : []);
+            }
+          }
+        }
+        break;
+      }
       case "budget_gate": {
         const t = ensureCurrent();
         const call = t.callsById.get(ev.call_id);
@@ -408,6 +441,11 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         // user-facing — handle quietly with a transient status word so it never
         // shows an "unknown event" banner.
         if (m.busy) m.statusWord = "Verifying";
+        // The text streamed before this gate was only a draft; the post-gate
+        // round is the real final reply. Discard the unflushed draft so it is
+        // not flushed as its own item and duplicated by the restated post-gate
+        // answer (matches static/v3/v3.js completion_check handling).
+        ensureCurrent().liveText = "";
         break;
       }
       case "ask_question": {
@@ -468,6 +506,23 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       const info = await getInfo(serverUrl, m.sessionId);
       if (info && info.latest_event_id != null) m.lastEventId = String(info.latest_event_id);
       if (info && typeof info.plan_mode === "boolean") m.planMode = info.plan_mode;
+      // Server snapshot is authoritative on the background tasks the SSE ring
+      // may have dropped (exit_code isn't in the REST list — keep any learned).
+      if (info && Array.isArray(info.tasks)) {
+        const next = new Map();
+        for (const t of info.tasks) {
+          if (!t || !t.job_id) continue;
+          const prev = m.backgroundTasks.get(t.job_id) || {};
+          next.set(t.job_id, {
+            job_id: t.job_id,
+            status: t.status || prev.status || "running",
+            summary: t.summary || prev.summary || "",
+            exit_code: prev.exit_code ?? null,
+            elapsed_sec: typeof t.elapsed_sec === "number" ? t.elapsed_sec : (prev.elapsed_sec ?? null),
+          });
+        }
+        m.backgroundTasks = next;
+      }
     } catch {
       /* keep the current cursor if the resync probe fails */
     }
@@ -688,6 +743,9 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       case "timeline":
         await doTimeline();
         break;
+      case "tasks":
+        await doTasks(arg);
+        break;
       case "plan":
         await doPlan(arg);
         break;
@@ -834,6 +892,37 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       pushNotice("info", `timeline (${(tl.tracks || []).length} track(s))`, lines);
     } catch (e) {
       pushNotice("error", `could not load timeline: ${e.message}`);
+    }
+  };
+
+  // /tasks — list background shell jobs; /tasks kill <job_id> — stop one.
+  const doTasks = async (arg) => {
+    if (!m.sessionId) return pushNotice("error", "not connected — /retry first");
+    const parts = (arg || "").trim().split(/\s+/).filter(Boolean);
+    if (parts[0] === "kill") {
+      const jobId = parts[1];
+      if (!jobId) return pushNotice("error", "usage: /tasks kill <job_id>");
+      try {
+        await killTask(serverUrl, m.sessionId, jobId);
+        pushNotice("success", `已请求停止后台任务 ${jobId}`);
+      } catch (e) {
+        pushNotice("error", `停止任务失败: ${e.message}`);
+      }
+      return;
+    }
+    if (parts.length) return pushNotice("error", `unknown: /tasks ${arg}`, ["usage: /tasks [kill <job_id>]"]);
+    // Bare /tasks: authoritative server snapshot (not the in-memory mirror).
+    try {
+      const data = await listTasks(serverUrl, m.sessionId);
+      const list = Array.isArray(data.tasks) ? data.tasks : [];
+      if (!list.length) return pushNotice("info", "没有后台任务");
+      const lines = list.map((t) => {
+        const el = typeof t.elapsed_sec === "number" ? ` · ${t.elapsed_sec.toFixed(0)}s` : "";
+        return `${t.job_id} [${t.status}]${el}${t.summary ? " " + t.summary : ""}`;
+      });
+      pushNotice("info", `后台任务 ×${list.length}`, lines);
+    } catch (e) {
+      pushNotice("error", `列出任务失败: ${e.message}`);
     }
   };
 
@@ -1302,6 +1391,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       ctrlCArmed=${m.ctrlCArmed}
       account=${m.account}
       planMode=${m.planMode}
+      tasks=${[...m.backgroundTasks.values()].filter((t) => t.status === "running" || t.status === "submitted" || t.status === "queued").length}
     />
   </${Box}>`;
 }

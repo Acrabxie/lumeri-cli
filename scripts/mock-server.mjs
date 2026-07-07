@@ -96,9 +96,50 @@ async function scriptedPlanTurn(sid, message) {
   emit(sid, "turn_complete", { deliverable_asset_ids: [] });
 }
 
+// Background shell task chain (mirrors gemia run_in_background run_shell): the
+// model submits a job, ends the turn, and the completion arrives between turns
+// as a background_task_update the watcher would emit.
+async function scriptedBackgroundTurn(sid, message) {
+  emit(sid, "turn_start");
+  emit(sid, "model_text_delta", { delta: "这个查找会跑一会儿，我放到后台。\n" });
+  await sleep(150);
+  const jobId = "shell_mock01";
+  emit(sid, "model_tool_call_start", { call_id: "b1", tool_name: "run_shell" });
+  emit(sid, "model_tool_call_ready", {
+    call_id: "b1",
+    args: { command: "find ~ -name '*.mov'", run_in_background: true },
+  });
+  emit(sid, "tool_exec_start", { call_id: "b1" });
+  emit(sid, "tool_exec_result", {
+    call_id: "b1",
+    result: { job_id: jobId, status: "submitted", summary: "find ~ -name '*.mov'" },
+  });
+  const s = sessions.get(sid);
+  if (s) {
+    s.tasks = s.tasks || new Map();
+    s.tasks.set(jobId, { job_id: jobId, status: "running", summary: "find ~ -name '*.mov'" });
+  }
+  emit(sid, "background_task_update", { job_id: jobId, status: "running", summary: "find ~ -name '*.mov'", elapsed_sec: 0 });
+  await sleep(120);
+  emit(sid, "model_text_delta", { delta: "提交完成，我先结束这轮，跑完会通知你。" });
+  emit(sid, "turn_complete", { deliverable_asset_ids: [] });
+  // Completion lands between turns.
+  await sleep(600);
+  const rec = sessions.get(sid)?.tasks?.get(jobId);
+  if (rec && rec.status === "running") {
+    rec.status = "done";
+    rec.exit_code = 0;
+    emit(sid, "background_task_update", {
+      job_id: jobId, status: "done", exit_code: 0,
+      summary: "find ~ -name '*.mov'", output_tail: "/Users/acrab/clip.mov\n", elapsed_sec: 0.7,
+    });
+  }
+}
+
 async function scriptedTurn(sid, message) {
   if (sessions.get(sid)?.planMode) return scriptedPlanTurn(sid, message);
   if (/\bask\b/i.test(message || "")) return scriptedAskTurn(sid, message);
+  if (/\b(find|background|bg)\b|后台/i.test(message || "")) return scriptedBackgroundTurn(sid, message);
   emit(sid, "turn_start");
   for (const d of ["Sure — let me ", "**warm-grade** ", `your clip.\n`]) {
     await sleep(150);
@@ -138,6 +179,17 @@ async function scriptedTurn(sid, message) {
 function json(res, status, obj) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(obj));
+}
+
+// Shape a session's background jobs like gemia SessionRunner.list_tasks().
+function tasksSnapshot(s) {
+  return [...(s?.tasks?.values() || [])].map((t) => ({
+    job_id: t.job_id,
+    status: t.status,
+    summary: t.summary,
+    elapsed_sec: 0,
+    error: t.error || null,
+  }));
 }
 
 const server = http.createServer((req, res) => {
@@ -282,7 +334,22 @@ const server = http.createServer((req, res) => {
       assets: [],
       latest_event_id: s?.eid || 0,
       plan_mode: !!s?.planMode,
+      tasks: tasksSnapshot(s),
     });
+  }
+  if (method === "GET" && sub === "/tasks") {
+    return json(res, 200, { tasks: tasksSnapshot(sessions.get(sid)) });
+  }
+  const killMatch = sub.match(/^\/tasks\/([^/]+)\/kill$/);
+  if (method === "POST" && killMatch) {
+    const jobId = killMatch[1];
+    const s = sessions.get(sid);
+    const rec = s?.tasks?.get(jobId);
+    if (!rec) return json(res, 404, { error: `unknown job: ${jobId}` });
+    rec.status = "failed";
+    rec.error = "killed";
+    emit(sid, "background_task_update", { job_id: jobId, status: "failed", summary: rec.summary, elapsed_sec: 0 });
+    return json(res, 200, { session_id: sid, job_id: jobId, status: "failed", error: "killed" });
   }
   if (method === "POST" && sub === "/plan_mode") {
     let body = "";

@@ -114,6 +114,21 @@ export async function getTimeline(baseUrl, sessionId) {
   return ok(res, 200);
 }
 
+// Background shell task chain (gemia run_in_background run_shell). listTasks
+// returns the authoritative snapshot the SSE ring can't (used by /tasks and
+// resyncAfterGap); killTask maps to POST .../tasks/{job_id}/kill.
+export async function listTasks(baseUrl, sessionId) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/tasks`);
+  return ok(res, 200);
+}
+
+export async function killTask(baseUrl, sessionId, jobId) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/tasks/${encodeURIComponent(jobId)}/kill`, {
+    method: "POST",
+  });
+  return ok(res, 200);
+}
+
 export async function closeSession(baseUrl, sessionId) {
   const res = await request(baseUrl, `/sessions/${sessionId}/close`, {
     method: "POST",

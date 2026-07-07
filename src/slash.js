@@ -10,6 +10,7 @@ export const COMMANDS = [
   { name: "open", desc: "Open an asset in the system viewer: /open <asset_id>", arg: "<asset_id>" },
   { name: "preview", desc: "Open the preview window for this session in your browser" },
   { name: "timeline", desc: "Show the current project timeline" },
+  { name: "tasks", desc: "Background shell jobs: /tasks [kill <job_id>]", arg: "[kill <job_id>]" },
   { name: "annotate", desc: "Annotate media-library videos: /annotate <asset_id|all>", arg: "<asset_id|all>" },
   { name: "annotations", desc: "List media-library annotations: /annotations [asset_id]", arg: "[asset_id]" },
   { name: "plan", desc: "Plan mode: /plan [on|off|approve] — 只规划不执行，批准后执行", arg: "[on|off|approve]" },
