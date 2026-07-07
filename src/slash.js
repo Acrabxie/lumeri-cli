@@ -15,6 +15,7 @@ export const COMMANDS = [
   { name: "plan", desc: "Plan mode: /plan [on|off|approve] — 只规划不执行，批准后执行", arg: "[on|off|approve]" },
   { name: "session", desc: "Show session id, server, and connection state" },
   { name: "retry", desc: "Reconnect to the server / recreate the session" },
+  { name: "setup", desc: "Check the backend is ready; first-run guidance" },
   { name: "login", desc: "Sign in: opens browser, or /login email / /login google" },
   { name: "logout", desc: "Sign out of the current account" },
   { name: "account", desc: "Show or switch account: /account [switch <#|id>]", arg: "[switch <#|id>]" },

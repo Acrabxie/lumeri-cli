@@ -42,6 +42,7 @@ const HELP = `Lumeri CLI — a terminal client for the Lumeri v3 video-editing a
 
 Usage
   lumeri [options]
+  lumeri setup                                            Check the backend is ready (first-run guidance)
   lumeri login [google|email]                             Sign in (Google or email code)
   lumeri whoami | logout                                  Show / clear the signed-in account
   lumeri codex <login|import|status|whoami|logout|chat>   Use ChatGPT subscription quota
@@ -80,6 +81,13 @@ if (process.argv[2] === "codex") {
 if (["login", "logout", "whoami"].includes(process.argv[2])) {
   const { run } = await import("../src/auth-cli.js");
   process.exit(await run(process.argv.slice(2)));
+}
+
+// `lumeri setup|onboard|init` — thin readiness check + first-run guidance.
+// Runs before the TUI so it works even when the backend isn't up yet.
+if (["setup", "onboard", "init"].includes(process.argv[2])) {
+  const { run } = await import("../src/setup-cli.js");
+  process.exit(await run(process.argv.slice(3)));
 }
 
 const opts = parseArgs(process.argv.slice(2));

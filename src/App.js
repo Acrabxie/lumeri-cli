@@ -35,6 +35,7 @@ import {
 } from "./auth.js";
 import { SseClient } from "./sse.js";
 import { parseSlash } from "./slash.js";
+import { setupGuidance } from "./setup-cli.js";
 import { toPendingAsk, buildAnswers } from "./ask.js";
 import { Banner } from "./components/Banner.js";
 import { Splash } from "./components/Splash.js";
@@ -569,6 +570,19 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         if (sseRef.current) sseRef.current.stop();
         await init();
         return;
+      case "setup":
+      case "onboard":
+      case "init":
+        if (m.conn === "offline") {
+          pushNotice("error", `backend not reachable at ${serverUrl}`, setupGuidance());
+        } else {
+          pushNotice("info", `✓ backend ready at ${serverUrl}`, [
+            `connection: ${m.conn}`,
+            "the backend owns onboarding — nothing to configure here.",
+            "not signed in? use /login",
+          ]);
+        }
+        break;
       case "login":
         await doLogin(arg);
         break;
