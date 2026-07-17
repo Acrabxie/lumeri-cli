@@ -24,10 +24,10 @@ function renderInline(text, kp) {
     } else if (m[3]) {
       nodes.push(html`<${Text} key=${k} italic>${m[4]}</${Text}>`);
     } else if (m[5] !== undefined) {
-      nodes.push(html`<${Text} key=${k} color=${color.warn}>${m[5]}</${Text}>`);
+      nodes.push(html`<${Text} key=${k} bold>${m[5]}</${Text}>`);
     } else if (m[6] !== undefined) {
       nodes.push(
-        html`<${Text} key=${k}><${Text} color=${color.link} underline>${m[6]}</${Text}><${Text} color=${color.muted}> (${m[7]})</${Text}></${Text}>`,
+        html`<${Text} key=${k}><${Text} color=${color.accentText} underline>${m[6]}</${Text}><${Text} dimColor> (${m[7]})</${Text}></${Text}>`,
       );
     }
     last = m.index + m[0].length;
@@ -41,38 +41,51 @@ function paragraph(text, key) {
 }
 
 function heading(level, text, key) {
-  const c = level <= 2 ? color.brand : color.text;
-  return html`<${Text} key=${key} bold color=${c}>${renderInline(text, key)}</${Text}>`;
+  if (level === 1)
+    return html`<${Text} key=${key} bold color=${color.accentText}>${renderInline(text, key)}</${Text}>`;
+  return html`<${Text} key=${key} bold>${renderInline(text, key)}</${Text}>`;
 }
 
 function hr(key) {
-  return html`<${Text} key=${key} color=${color.muted}>${glyph.hr.repeat(40)}</${Text}>`;
+  return html`<${Text} key=${key} dimColor>${glyph.hr.repeat(40)}</${Text}>`;
 }
 
 function codeBlock(code, lang, key) {
   const lines = code.split("\n");
-  return html`<${Box} key=${key} flexDirection="column" borderStyle="round" borderColor=${color.muted} paddingX=${1} marginY=${0}>
-    ${lang ? html`<${Text} key="lang" color=${color.muted} dimColor>${lang}</${Text}>` : null}
-    ${lines.map((ln, idx) => html`<${Text} key=${"c" + idx} color=${color.warn}>${ln.length ? ln : " "}</${Text}>`)}
+  return html`<${Box} key=${key} flexDirection="column" paddingLeft=${2} marginY=${0}>
+    ${lang ? html`<${Text} key="lang" dimColor>${lang}</${Text}>` : null}
+    ${lines.map((ln, idx) => html`<${Text} key=${"c" + idx}>${ln.length ? ln : " "}</${Text}>`)}
   </${Box}>`;
 }
 
 function blockquote(text, key) {
   const inner = renderMarkdown(text, key + "q");
-  return html`<${Box} key=${key} flexDirection="column" borderStyle="single" borderColor=${color.muted} borderTop=${false} borderRight=${false} borderBottom=${false} paddingLeft=${1}>
+  return html`<${Box} key=${key} flexDirection="column" borderStyle="single" borderDimColor=${true} borderTop=${false} borderRight=${false} borderBottom=${false} paddingLeft=${1}>
     ${inner}
   </${Box}>`;
 }
 
 function list(items, key) {
-  return html`<${Box} key=${key} flexDirection="column" paddingLeft=${1}>
+  return html`<${Box} key=${key} flexDirection="column" paddingLeft=${2}>
     ${items.map(
       (it, idx) => html`<${Box} key=${idx}>
-        <${Text} color=${color.muted}>${it.ordered ? it.marker + " " : glyph.bullet + " "}</${Text}>
+        <${Text} dimColor>${it.ordered ? it.marker + " " : glyph.bullet + " "}</${Text}>
         <${Text}>${renderInline(it.text, key + idx)}</${Text}>
       </${Box}>`,
     )}
   </${Box}>`;
+}
+
+// Hard-wrapped source lines are re-joined with a space — except between two
+// CJK characters, where Latin-style joining would inject a visible gap
+// mid-sentence (CJK prose carries no inter-line space).
+const CJK_RE = /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/;
+function joinProse(lines) {
+  return lines.reduce((acc, ln) => {
+    if (!acc) return ln;
+    const glue = CJK_RE.test(acc.slice(-1)) && CJK_RE.test(ln.charAt(0)) ? "" : " ";
+    return acc + glue + ln;
+  }, "");
 }
 
 const BLOCK_START = /^\s*(#{1,6}\s|>|```|([-*+]|\d+\.)\s)/;
@@ -142,7 +155,7 @@ export function renderMarkdown(src, kp = "md") {
       para.push(lines[i]);
       i++;
     }
-    blocks.push(paragraph(para.join(" "), `${kp}-${b++}`));
+    blocks.push(paragraph(joinProse(para), `${kp}-${b++}`));
   }
   return blocks;
 }

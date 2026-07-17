@@ -129,7 +129,7 @@ const all = frames.join("\n");
 const fail = [];
 
 if (!afterOn.includes("计划模式已开启")) fail.push("a: enable notice missing");
-if (!afterOn.includes("⏸ plan")) fail.push("a: status-line plan chip missing");
+if (!afterOn.includes("plan mode")) fail.push("a: status-line plan chip missing");
 if (!planPosts.length || planPosts[0].enabled !== true)
   fail.push(`a: expected first /plan_mode POST {enabled:true}, got ${JSON.stringify(planPosts[0])}`);
 

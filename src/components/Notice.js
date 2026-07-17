@@ -4,7 +4,7 @@ import { color, glyph } from "../theme.js";
 import { COMMANDS } from "../slash.js";
 
 const TONE = {
-  info: color.muted,
+  info: null, // dim glyph, no hue
   success: color.success,
   error: color.error,
   warn: color.warn,
@@ -13,27 +13,38 @@ const TONE = {
 const SHORTCUTS = [
   ["enter", "send message"],
   ["\\ + enter", "newline"],
-  ["↑ / ↓", "history / menu"],
+  ["up / down", "history / menu"],
   ["tab", "complete /command"],
   ["shift+tab", "toggle plan mode"],
   ["esc", "clear input"],
   ["ctrl+c", "exit (twice)"],
 ];
 
+// Unboxed help — bold headings and a two-column layout whose command column is
+// sized to the longest entry, so nothing wraps mid-name.
 function HelpNotice() {
-  return html`<${Box} flexDirection="column" borderStyle="round" borderColor=${color.muted} paddingX=${1} marginBottom=${1}>
-    <${Text} bold color=${color.brand}>Commands</${Text}>
-    ${COMMANDS.filter((c) => !c.hidden).map(
-      (c) => html`<${Box} key=${c.name}>
-        <${Box} width=${20}><${Text} color=${color.brand}>${"/" + c.name + (c.arg ? " " + c.arg : "")}</${Text}></${Box}>
-        <${Text} color=${color.muted}>${c.desc}</${Text}>
+  const cmds = COMMANDS.filter((c) => !c.hidden).map((c) => ({
+    label: "/" + c.name + (c.arg ? " " + c.arg : ""),
+    desc: c.desc,
+  }));
+  const col = Math.max(...cmds.map((c) => c.label.length), ...SHORTCUTS.map(([k]) => k.length)) + 2;
+  return html`<${Box} flexDirection="column" marginBottom=${1}>
+    <${Text} bold>Commands</${Text}>
+    <${Box}>
+      <${Text} dimColor>${"  " + glyph.user + " /upload clip.mp4"}</${Text}>
+      <${Text} dimColor>${"   e.g. add a file, then just describe the edit"}</${Text}>
+    </${Box}>
+    ${cmds.map(
+      (c) => html`<${Box} key=${c.label} paddingLeft=${2}>
+        <${Box} width=${col}><${Text} color=${color.accentText}>${c.label}</${Text}></${Box}>
+        <${Text} dimColor>${c.desc}</${Text}>
       </${Box}>`,
     )}
-    <${Box} marginTop=${1}><${Text} bold color=${color.brand}>Shortcuts</${Text}></${Box}>
+    <${Box} marginTop=${1}><${Text} bold>Shortcuts</${Text}></${Box}>
     ${SHORTCUTS.map(
-      ([k, d]) => html`<${Box} key=${k}>
-        <${Box} width=${20}><${Text} color=${color.text}>${k}</${Text}></${Box}>
-        <${Text} color=${color.muted}>${d}</${Text}>
+      ([k, d]) => html`<${Box} key=${k} paddingLeft=${2}>
+        <${Box} width=${col}><${Text}>${k}</${Text}></${Box}>
+        <${Text} dimColor>${d}</${Text}>
       </${Box}>`,
     )}
   </${Box}>`;
@@ -41,7 +52,7 @@ function HelpNotice() {
 
 export function Notice({ notice }) {
   if (notice.tone === "help") return html`<${HelpNotice} />`;
-  const c = TONE[notice.tone] || color.muted;
+  const c = TONE[notice.tone];
   const mark =
     notice.tone === "error"
       ? glyph.cross
@@ -50,8 +61,8 @@ export function Notice({ notice }) {
         : glyph.bullet;
   return html`<${Box} flexDirection="column" marginBottom=${1}>
     ${notice.title
-      ? html`<${Box}><${Text} color=${c}>${mark + " "}</${Text}><${Text} color=${c}>${notice.title}</${Text}></${Box}>`
+      ? html`<${Box}><${Text} color=${c} dimColor=${!c}>${mark + " "}</${Text}><${Text} bold>${notice.title}</${Text}></${Box}>`
       : null}
-    ${(notice.lines || []).map((ln, idx) => html`<${Text} key=${idx} color=${color.muted}>${"  " + ln}</${Text}>`)}
+    ${(notice.lines || []).map((ln, idx) => html`<${Text} key=${idx} dimColor>${"  " + ln}</${Text}>`)}
   </${Box}>`;
 }

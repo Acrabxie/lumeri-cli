@@ -62,27 +62,39 @@ export function truncate(s, max = 200) {
 }
 
 // Friendly display labels for the file-management + memory tools so the
-// activity log reads cleanly (e.g. "read_file" → "📄 read file"). Falls back to
+// activity log reads cleanly (e.g. "read_file" → "Read file"). Falls back to
 // the raw tool name for anything unmapped — so unknown/future verbs always show
-// something sensible and existing verbs are never hidden.
+// something sensible and existing verbs are never hidden. Deliberately no
+// emoji: emoji cell widths vary by terminal and Unicode version, which shears
+// the ⎿ alignment column, and the verb reads fine alone.
 const TOOL_LABELS = {
-  read_file: "📄 read file",
-  write_file: "📝 write file",
-  copy_in: "📥 copy in",
-  list_dir: "📁 list dir",
-  move_file: "🚚 move file",
-  organize_files: "🗂 organize files",
-  remember: "🧠 remember",
-  log_note: "🗒 log note",
-  lumen_seek: "⏩ Seek",
-  lumen_render_range: "🎬 Render range",
-  retime_segment: "⏱ Retime",
-  merge_compositions: "🔀 Merge timelines",
-  set_lane: "🎚 Set lane",
-  set_range: "🎬 Set range",
-  set_time_remap: "⏱ Speed curve",
-  reverse: "⏪ Reverse",
-  ripple_delete: "✂️ Ripple delete",
+  read_file: "Read file",
+  write_file: "Write file",
+  copy_in: "Copy in",
+  list_dir: "List dir",
+  move_file: "Move file",
+  organize_files: "Organize files",
+  remember: "Remember",
+  log_note: "Log note",
+  lumen_seek: "Seek",
+  lumen_render_range: "Render range",
+  lumen_comp_to_timeline: "Comp to timeline",
+  retime_segment: "Retime",
+  merge_compositions: "Merge timelines",
+  set_lane: "Set lane",
+  set_range: "Set range",
+  set_time_remap: "Speed curve",
+  reverse: "Reverse",
+  ripple_delete: "Ripple delete",
+  // Quanta (discrete video / presentation) verbs — the state tree tools.
+  draft_quanta: "Draft quanta",
+  set_quanta: "Set quanta",
+  update_quantum: "Update quantum",
+  get_quanta: "Get quanta",
+  assemble_quanta: "Assemble quanta",
+  refine_quantum: "Refine quantum",
+  // Vector motion design engine (feat/vector-motion).
+  vector_motion: "Vector motion",
 };
 
 export function toolLabel(name) {

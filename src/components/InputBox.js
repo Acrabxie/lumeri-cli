@@ -4,8 +4,12 @@ import { html } from "../html.js";
 import { color, glyph } from "../theme.js";
 import { autocompleteState, menuScroll } from "../slash.js";
 
-const PLACEHOLDER = "Send a message to Lumeri…  (/help for commands)";
-const ANSWER_PLACEHOLDER = "Type your answer to Lumeri…  (/cancel to dismiss)";
+// With SGR stripped (NO_COLOR / TERM=dumb) an inverse-space cursor is
+// invisible; degrade to a literal pipe so the edit point stays findable.
+const RAW_CURSOR = Boolean(process.env.NO_COLOR) || process.env.TERM === "dumb";
+
+const PLACEHOLDER = "Describe an edit — / for commands";
+const ANSWER_PLACEHOLDER = "Type your answer — /cancel to dismiss";
 const MENU_MAX = 6;
 
 export function InputBox({ onSubmit, history, answerMode = false }) {
@@ -201,28 +205,44 @@ export function InputBox({ onSubmit, history, answerMode = false }) {
   const at = atRaw === "" || atRaw === "\n" ? " " : atRaw;
   const after = atRaw === "\n" ? "\n" + text.slice(cursor + 1) : text.slice(cursor + 1);
 
+  // Menu label column sized to the longest match so descriptions align and
+  // nothing wraps mid-name; the selected row is inverse video (works on every
+  // terminal theme without knowing its palette).
+  const labelOf = (c) => "/" + c.name + (c.arg ? " " + c.arg : "");
+  const labelCol = matches.length ? Math.max(...matches.map((c) => labelOf(c).length)) + 2 : 0;
+
   return html`<${Box} flexDirection="column">
-    <${Box} borderStyle="round" borderColor=${color.brand} paddingX=${1}>
-      <${Text} color=${color.brand}>${glyph.user + " "}</${Text}>
+    <${Box} borderStyle="round" borderColor=${color.accent} paddingX=${1}>
+      <${Text} dimColor>${glyph.user + " "}</${Text}>
       ${showPlaceholder
-        ? html`<${Text}><${Text} inverse> </${Text}><${Text} color=${color.muted}>${placeholder}</${Text}></${Text}>`
-        : html`<${Text}>${before}<${Text} inverse>${at}</${Text}>${after}</${Text}>`}
+        ? RAW_CURSOR
+          ? html`<${Text}>|<${Text} dimColor>${" " + placeholder}</${Text}></${Text}>`
+          : html`<${Text}><${Text} inverse> </${Text}><${Text} dimColor>${placeholder}</${Text}></${Text}>`
+        : RAW_CURSOR
+          ? html`<${Text}>${before}|${at === " " ? "" : at}${after}</${Text}>`
+          : html`<${Text}>${before}<${Text} inverse>${at}</${Text}>${after}</${Text}>`}
     </${Box}>
     ${matches.length
       ? html`<${Box} flexDirection="column" marginLeft=${2}>
           ${winStart.current > 0
-            ? html`<${Text} color=${color.muted}>${`↑ ${winStart.current} more`}</${Text}>`
+            ? html`<${Text} dimColor>${`↑ ${winStart.current} more`}</${Text}>`
             : null}
-          ${visible.map(
-            (c, idx) => html`<${Box} key=${c.name}>
-              <${Text} color=${winStart.current + idx === selClamped ? color.brand : color.muted} bold=${winStart.current + idx === selClamped}>
-                ${"/" + c.name + (c.arg ? " " + c.arg : "")}
-              </${Text}>
-              <${Text} color=${color.muted}>${"  " + c.desc}</${Text}>
-            </${Box}>`,
-          )}
+          ${visible.map((c, idx) => {
+            const selected = winStart.current + idx === selClamped;
+            const row = labelOf(c).padEnd(labelCol) + c.desc;
+            return selected
+              ? html`<${Box} key=${c.name}>
+                  <${Text} color=${color.accent}>${glyph.pointer + " "}</${Text}>
+                  <${Text} inverse>${row}</${Text}>
+                </${Box}>`
+              : html`<${Box} key=${c.name}>
+                  <${Text}>${"  "}</${Text}>
+                  <${Text} color=${color.accentText}>${labelOf(c).padEnd(labelCol)}</${Text}>
+                  <${Text} dimColor>${c.desc}</${Text}>
+                </${Box}>`;
+          })}
           ${hiddenBelow > 0
-            ? html`<${Text} color=${color.muted}>${`↓ ${hiddenBelow} more`}</${Text}>`
+            ? html`<${Text} dimColor>${`↓ ${hiddenBelow} more`}</${Text}>`
             : null}
         </${Box}>`
       : null}
