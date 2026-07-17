@@ -56,6 +56,25 @@ export async function submitTurn(baseUrl, sessionId, message) {
   return ok(res, 202);
 }
 
+// Fetch the backend model catalog (priority-ordered) + active selection.
+//   GET /model -> { slot, priority:[{id,label,provider}], efforts:[…], active }
+// Mirrors the web client's /model command (static/v3/v3.js).
+export async function getModel(baseUrl) {
+  const res = await request(baseUrl, "/model");
+  return ok(res, 200);
+}
+
+// Switch the active model and/or thinking effort. Send only the keys you want
+// to change; a value of null/"" resets that dimension to the backend default.
+//   POST /model { model?, effort? } -> { ok, slot, priority, efforts, active }
+export async function setModel(baseUrl, { model, effort } = {}) {
+  const json = {};
+  if (model !== undefined) json.model = model;
+  if (effort !== undefined) json.effort = effort;
+  const res = await request(baseUrl, "/model", { method: "POST", json });
+  return ok(res, 200);
+}
+
 export async function listAssets(baseUrl, sessionId) {
   const res = await request(baseUrl, `/sessions/${sessionId}/assets`);
   return ok(res, 200).assets || [];
@@ -170,14 +189,14 @@ export function assetUrl(baseUrl, sessionId, assetId) {
 // The read-only preview monitor (gemia static/v3/preview.html), attached to a
 // specific session. Served same-origin with the sidecar.
 export function previewUrl(baseUrl, sessionId) {
-  const u = new URL("/v3/preview.html", baseUrl);
+  const u = new URL("/video/preview.html", baseUrl);
   u.searchParams.set("session", sessionId);
   return u.toString();
 }
 
 export async function previewAvailable(baseUrl) {
   try {
-    const res = await request(baseUrl, "/v3/preview.html", { timeoutMs: 3000 });
+    const res = await request(baseUrl, "/video/preview.html", { timeoutMs: 3000 });
     return res.status === 200;
   } catch {
     return false;

@@ -28,6 +28,21 @@ const DEMO_ACCOUNTS = [
 ];
 let activeAccount = null;
 
+// /model priority catalog + selection (mirrors gemia DEFAULT_MODEL_PROFILE).
+// model/effort null = using the backend default (priority[0] / "medium").
+const MOCK_MODEL = {
+  priority: [
+    { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", provider: "openrouter" },
+    { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash", provider: "openrouter" },
+    { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "openrouter" },
+    { id: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6", provider: "openrouter" },
+    { id: "openai/gpt-5.4", label: "GPT-5.4 (reviewer)", provider: "openrouter" },
+  ],
+  efforts: ["low", "medium", "high", "max"],
+  model: null,
+  effort: null,
+};
+
 function emit(sid, kind, extra = {}) {
   const s = sessions.get(sid);
   if (!s || !s.res) return;
@@ -196,6 +211,49 @@ const server = http.createServer((req, res) => {
   const { method, url } = req;
 
   if (method === "GET" && url.startsWith("/health")) return json(res, 200, { ok: true });
+
+  // ── /model (mirrors gemia server.py GET/POST /model) ──────────────────
+  const modelPayload = (post) => {
+    const model = MOCK_MODEL.model || MOCK_MODEL.priority[0].id;
+    const effort = MOCK_MODEL.effort || "medium";
+    const label = (MOCK_MODEL.priority.find((p) => p.id === model) || {}).label || model;
+    const active = {
+      model, label, effort,
+      is_default_model: !MOCK_MODEL.model,
+      is_default_effort: !MOCK_MODEL.effort,
+      default_model: MOCK_MODEL.priority[0].id,
+      default_effort: "medium",
+    };
+    const out = { slot: "planner", priority: MOCK_MODEL.priority, efforts: MOCK_MODEL.efforts, active };
+    return post ? { ok: true, ...out } : out;
+  };
+  if (method === "GET" && url === "/model") return json(res, 200, modelPayload(false));
+  if (method === "POST" && url === "/model") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let b = {};
+      try { b = JSON.parse(body || "{}"); } catch { /* ignore */ }
+      if ("effort" in b) {
+        if (b.effort && !MOCK_MODEL.efforts.includes(b.effort))
+          return json(res, 400, { error: `unknown effort: ${b.effort}` });
+        MOCK_MODEL.effort = b.effort || null;
+      }
+      if ("model" in b) {
+        if (b.model === "default" || !b.model) MOCK_MODEL.model = null;
+        else {
+          const idx = /^\d+$/.test(b.model)
+            ? Number(b.model) - 1
+            : MOCK_MODEL.priority.findIndex((p) => p.id === b.model);
+          const picked = MOCK_MODEL.priority[idx];
+          if (!picked) return json(res, 400, { error: `unknown model: ${b.model}` });
+          MOCK_MODEL.model = picked.id;
+        }
+      }
+      json(res, 200, modelPayload(true));
+    });
+    return;
+  }
 
   // ── account / auth (mirrors gemia/accounts.py + server.py auth routes) ──
   if (method === "GET" && url === "/auth/session") {

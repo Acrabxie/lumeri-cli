@@ -25,6 +25,8 @@ import {
   assetUrl,
   previewUrl,
   previewAvailable,
+  getModel,
+  setModel,
 } from "./api.js";
 import {
   getSession,
@@ -47,7 +49,11 @@ import { InputBox } from "./components/InputBox.js";
 import { AskPrompt } from "./components/AskPrompt.js";
 import { StatusLine } from "./components/StatusLine.js";
 
-export function App({ version, serverUrl, splash = true, preview = true }) {
+// When turn_error arrives without a following turn_wrapup, release busy after
+// this many ms so the UI never stays permanently wedged.
+const TURN_ERROR_GRACE_MS = 1000;
+
+export function App({ version, serverUrl, splash = true, preview = true, onTurnFinalized = null }) {
   const { exit } = useApp();
   const [, force] = useReducer((c) => c + 1, 0);
   const [tick, setTick] = useState(0);
@@ -76,6 +82,15 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     pendingLogin: null, // active email-code sign-in: { step: "email"|"sending"|"code", email? }
     planMode: false, // mirrors the backend per-session plan-mode flag
     backgroundTasks: new Map(), // job_id → background shell task (run_in_background run_shell)
+    turnErrorGrace: null, // setTimeout handle: fires if turn_wrapup never follows turn_error
+    // Finalized turns waiting behind an errored turn whose wrapup may still be
+    // in flight. Keeping them dynamic avoids freezing an incomplete turn in
+    // Ink <Static>, which cannot be updated after it has been printed.
+    settlingTurns: [], // [{ turn, awaitingWrapup }]
+    // /clear intentionally discards dynamic settling turns. Keep one tombstone
+    // per discarded errored turn so its late wrapup is consumed instead of
+    // manufacturing an empty turn or contaminating a newer active turn.
+    discardedWrapups: 0,
   }).current;
 
   const sseRef = useRef(null);
@@ -118,12 +133,92 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     t.liveText = "";
   };
 
+  const commitTurn = (turn) => {
+    try { onTurnFinalized?.(turn); } catch {}
+    addLog({ type: "turn", id: turn.id, turn });
+  };
+
+  const flushSettlingTurns = () => {
+    while (m.settlingTurns.length && !m.settlingTurns[0].awaitingWrapup) {
+      commitTurn(m.settlingTurns.shift().turn);
+    }
+  };
+
+  const queueFinalizedTurn = (turn, { awaitingWrapup = false } = {}) => {
+    flushLiveText(turn);
+    turn.complete = true;
+    if (awaitingWrapup || m.settlingTurns.length) {
+      m.settlingTurns.push({ turn, awaitingWrapup });
+      flushSettlingTurns();
+    } else {
+      commitTurn(turn);
+    }
+  };
+
   const finalizeCurrent = () => {
     if (!m.current) return;
-    flushLiveText(m.current);
-    m.current.complete = true;
-    addLog({ type: "turn", id: m.current.id, turn: m.current });
+    const turn = m.current;
     m.current = null;
+    queueFinalizedTurn(turn);
+  };
+
+  // SSE events are ordered. A new turn_start proves that an older errored turn
+  // will not receive a wrapup ahead of it, so close that pairing window without
+  // ever attaching an orphan wrapup to the new turn.
+  const settleMissingWrapups = () => {
+    let settled = 0;
+    for (const entry of m.settlingTurns) {
+      if (!entry.awaitingWrapup) continue;
+      entry.turn.banners.push({
+        kind: "turn_wrapup",
+        text: "turn ended after error; no wrap-up event was received",
+      });
+      entry.awaitingWrapup = false;
+      settled += 1;
+    }
+    flushSettlingTurns();
+    return settled;
+  };
+
+  const settleErroredTurnsForRetry = () => {
+    let missingWrapups = 0;
+    if (m.turnErrorGrace) {
+      clearTimeout(m.turnErrorGrace);
+      m.turnErrorGrace = null;
+    }
+    if (m.current?.banners.some((banner) => banner.kind === "turn_error")) {
+      m.current.banners.push({
+        kind: "turn_wrapup",
+        text: "turn ended after error; reconnecting before a wrap-up event was received",
+      });
+      finalizeCurrent();
+      m.busy = false;
+      m.turnStartedAt = 0;
+      missingWrapups += 1;
+    }
+    missingWrapups += settleMissingWrapups();
+    return missingWrapups;
+  };
+
+  const discardCurrentErroredTurn = () => {
+    if (!m.current?.banners.some((banner) => banner.kind === "turn_error")) return false;
+    if (m.turnErrorGrace) {
+      clearTimeout(m.turnErrorGrace);
+      m.turnErrorGrace = null;
+    }
+    m.current = null;
+    m.busy = false;
+    m.turnStartedAt = 0;
+    // The backend may still deliver the real terminal wrapup. Consume it while
+    // this session remains before its next ordered turn_start.
+    m.discardedWrapups += 1;
+    return true;
+  };
+
+  const discardSettlingTurns = () => {
+    const awaiting = m.settlingTurns.filter((entry) => entry.awaitingWrapup).length;
+    if (awaiting) m.discardedWrapups += awaiting;
+    m.settlingTurns = [];
   };
 
   const ensureCurrent = () => {
@@ -133,10 +228,18 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
 
   // Drop any in-flight turn and clear the busy/timer/queue bookkeeping.
   const resetTurnState = ({ keepQueue = false } = {}) => {
+    if (m.turnErrorGrace) {
+      clearTimeout(m.turnErrorGrace);
+      m.turnErrorGrace = null;
+    }
     m.current = null;
     m.busy = false;
     m.turnStartedAt = 0;
-    if (!keepQueue) m.queued = [];
+    if (!keepQueue) {
+      m.queued = [];
+      m.settlingTurns = [];
+      m.discardedWrapups = 0;
+    }
   };
 
   // ── SSE event handling (mirrors gemia static/v3/v3.js handlers) ───────
@@ -160,9 +263,36 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
   const handleEvent = (ev) => {
     switch (ev.kind) {
       case "turn_start": {
+        // This session's SSE is ordered: any wrapup for a discarded older turn
+        // must be delivered before a newer turn_start. If none arrived, its
+        // tombstone is now stale and must not swallow the newer turn's wrapup.
+        m.discardedWrapups = 0;
+        settleMissingWrapups();
         m.busy = true;
         if (!m.turnStartedAt) m.turnStartedAt = Date.now();
         ensureCurrent();
+        break;
+      }
+      case "turn_guidance_queued": {
+        // Web/API steering acknowledgement; the model consumes it at the next
+        // safe round boundary. No extra terminal noise is needed here.
+        break;
+      }
+      case "turn_guidance_applied": {
+        const t = ensureCurrent();
+        t.liveText = ""; // the pre-guidance streamed text was only a draft
+        if (m.busy) m.statusWord = "Steering";
+        break;
+      }
+      case "turn_cancelled": {
+        const t = ensureCurrent();
+        t.banners.push({
+          kind: "turn_wrapup",
+          text: ev.message || "已停止当前执行，已经完成的进度会保留",
+        });
+        finalizeCurrent();
+        resetTurnState({ keepQueue: true });
+        drainQueue();
         break;
       }
       case "model_text_delta": {
@@ -414,21 +544,73 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       }
       case "turn_error": {
         const t = ensureCurrent();
-        t.banners.push({ kind: "turn_error", text: `turn error: ${ev.error || "unknown"}` });
-        finalizeCurrent();
-        resetTurnState({ keepQueue: true });
-        drainQueue();
+        // "incomplete_goal" is a soft stop, not a failure: the model's own words
+        // (when the turn did work) precede it and a turn_wrapup note follows.
+        // Skip the red error banner but keep the grace-timer finalize path.
+        // Genuine host failures still surface the banner.
+        if (ev.reason !== "incomplete_goal") {
+          t.banners.push({ kind: "turn_error", text: `turn error: ${ev.error || "unknown"}` });
+        }
+        // Do NOT finalize here — a following turn_wrapup finalizes the same turn
+        // so both banners appear in one entry, not two separate turns.
+        // Start a grace timer: if turn_wrapup never arrives, auto-release busy so
+        // the UI is never permanently wedged on a lone turn_error.
+        if (m.turnErrorGrace) clearTimeout(m.turnErrorGrace);
+        m.turnErrorGrace = setTimeout(() => {
+          m.turnErrorGrace = null;
+          if (m.busy && m.current) {
+            const erroredTurn = m.current;
+            m.current = null;
+            queueFinalizedTurn(erroredTurn, { awaitingWrapup: true });
+            m.busy = false;
+            m.turnStartedAt = 0;
+            drainQueue();
+            scheduleRender();
+          }
+        }, TURN_ERROR_GRACE_MS);
+        m.turnErrorGrace.unref?.();
         break;
       }
       case "turn_wrapup": {
         // Graceful stop (budget exhaustion / doom loop / stream error).
-        // Informational — NOT an error — so surface the
-        // synthesized summary and end the turn like turn_complete. Mirrors the
-        // web client (static/v3/v3.js turn_wrapup handler).
+        // Also the terminal event after turn_error — finalizes whatever is current
+        // (which may already carry a turn_error banner). Mirrors the web client
+        // (static/v3/v3.js turn_wrapup handler).
+        // A /clear tombstone represents an older discarded error turn. Consume
+        // its late wrapup before touching any visible/current turn, including a
+        // newer errored turn with its own active grace timer.
+        if (m.discardedWrapups > 0) {
+          m.discardedWrapups -= 1;
+          scheduleRender();
+          break;
+        }
+        // An incomplete_goal wrap-up is a soft pause, not a failure — show a
+        // friendly note instead of the raw English "Stopped because…" message
+        // (mirrors the web client's fixed soft banner). Other reasons keep the
+        // synthesized explanation.
+        const wrapupText =
+          ev.reason === "incomplete_goal"
+            ? "本轮先到这里，随时叫我继续"
+            : ev.message || `stopped: ${ev.reason || "wrap-up"}`;
+        // If the grace period already elapsed, merge this event into the
+        // deferred errored turn. Do not cancel a newer current turn's timer.
+        const deferred = m.settlingTurns.find((entry) => entry.awaitingWrapup);
+        if (deferred) {
+          deferred.turn.banners.push({
+            kind: "turn_wrapup",
+            text: wrapupText,
+          });
+          deferred.awaitingWrapup = false;
+          flushSettlingTurns();
+          scheduleRender();
+          break;
+        }
+        // This wrapup belongs to the current errored turn.
+        if (m.turnErrorGrace) { clearTimeout(m.turnErrorGrace); m.turnErrorGrace = null; }
         const t = ensureCurrent();
         t.banners.push({
           kind: "turn_wrapup",
-          text: ev.message || `stopped: ${ev.reason || "wrap-up"}`,
+          text: wrapupText,
         });
         finalizeCurrent();
         resetTurnState({ keepQueue: true });
@@ -676,6 +858,59 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
     }
   };
 
+  // Switch the backend model / thinking effort. No arg lists the priority
+  // catalog with the active pick marked; an arg sets it. The selection is
+  // global + persisted (config.json) — same store the web /model uses.
+  const doModel = async (arg) => {
+    if (m.conn === "offline") {
+      pushNotice("error", "not connected — /retry to reconnect");
+      return;
+    }
+    const tokens = (arg || "").trim().split(/\s+/).filter(Boolean);
+    try {
+      // Bare /model → show the catalog.
+      if (tokens.length === 0) {
+        const info = await getModel(serverUrl);
+        const efforts = info.efforts || [];
+        const active = info.active || {};
+        const lines = (info.priority || []).map((it, i) => {
+          const on = it.id === active.model;
+          const def = i === 0 ? " · default" : "";
+          return `${on ? "●" : "○"} ${i + 1}. ${it.label}${def}  (${it.id})`;
+        });
+        lines.push(
+          `思考强度: ${active.effort}${active.is_default_effort ? " · default" : ""}  ` +
+            `[${efforts.join(" / ")}]`,
+        );
+        lines.push("切换: /model <#|id> [强度] · 例 /model 2 high · /model default 复位");
+        pushNotice("info", `当前模型: ${active.label} (${active.model})`, lines);
+        return;
+      }
+      // Determine intent: a lone effort keyword sets effort; otherwise the
+      // first token is the model and an optional second token is the effort.
+      const info = await getModel(serverUrl);
+      const efforts = info.efforts || [];
+      const body = {};
+      if (tokens.length === 1 && efforts.includes(tokens[0].toLowerCase())) {
+        body.effort = tokens[0].toLowerCase();
+      } else {
+        body.model = tokens[0];
+        if (tokens[1]) body.effort = tokens[1].toLowerCase();
+      }
+      const res = await setModel(serverUrl, body);
+      const active = res.active || {};
+      pushNotice("success", `已切换 → ${active.label}`, [
+        `模型: ${active.model}${active.is_default_model ? " · default" : ""}`,
+        `思考强度: ${active.effort}${active.is_default_effort ? " · default" : ""}`,
+        "对所有会话生效（下一个回合起）",
+      ]);
+    } catch (e) {
+      pushNotice("error", `model switch failed: ${e.message}`, [
+        "usage: /model [<#|id>] [low|medium|high|max]",
+      ]);
+    }
+  };
+
   // ── slash commands ───────────────────────────────────────────────────
   const runSlash = async (slash) => {
     const { name, arg } = slash;
@@ -701,7 +936,14 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
         ]);
         break;
       case "retry":
-        resetTurnState();
+        {
+          // A synthesized wrapup closes the visible turn, but the old stream may
+          // already have its real wrapup in flight. Preserve a tombstone across
+          // reset; the next ordered turn_start safely expires it if it never lands.
+          const missingWrapups = settleErroredTurnsForRetry();
+          resetTurnState();
+          m.discardedWrapups += missingWrapups;
+        }
         if (sseRef.current) sseRef.current.stop();
         await init();
         return;
@@ -749,6 +991,9 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       case "plan":
         await doPlan(arg);
         break;
+      case "model":
+        await doModel(arg);
+        break;
       case "annotate":
         await doAnnotate(arg);
         break;
@@ -762,10 +1007,16 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
   };
 
   const clearTranscript = () => {
+    // Once turn_error has arrived, /clear may discard that terminal turn even
+    // during its grace window. Cancel the timer and tombstone its late wrapup so
+    // it cannot reappear after the screen was cleared.
+    const discardedCurrent = discardCurrentErroredTurn();
+    discardSettlingTurns();
     process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
     m.log = [{ type: "banner", id: "banner" }];
     m.staticKey++;
     if (m.sessionId) pushNotice("success", `connected · session ${m.sessionId}`);
+    if (discardedCurrent) drainQueue();
   };
 
   const newSession = async () => {
@@ -835,7 +1086,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       available = false;
     }
     if (!available) {
-      if (force) pushNotice("info", "preview UI not found on this server", [`expected ${serverUrl}/v3/preview.html`]);
+      if (force) pushNotice("info", "preview UI not found on this server", [`expected ${serverUrl}/video/preview.html`]);
       return;
     }
     const url = previewUrl(serverUrl, m.sessionId);
@@ -849,6 +1100,14 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
 
   const refreshTimelineNotice = async (ev = {}) => {
     if (!m.sessionId) return;
+    if (ev.state_scope === "quanta") {
+      // Quanta-only patch: the clip-count fetch is meaningless (and the old
+      // "timeline updated" wording was misleading for state-tree edits).
+      const n = Array.isArray(ev.ops) ? ev.ops.length : 1;
+      pushNotice("success", `quanta updated · ${n} scope(s)`, [`seq ${ev.seq ?? "?"}`]);
+      renderNow();
+      return;
+    }
     try {
       const tl = await getTimeline(serverUrl, m.sessionId);
       const tracks = Array.isArray(tl.tracks) ? tl.tracks : [];
@@ -1350,6 +1609,7 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
       if (m.throttleTimer) clearTimeout(m.throttleTimer);
       if (m.ctrlCTimer) clearTimeout(m.ctrlCTimer);
       if (m.loginPoll) clearTimeout(m.loginPoll);
+      if (m.turnErrorGrace) clearTimeout(m.turnErrorGrace);
       if (sseRef.current) sseRef.current.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1373,6 +1633,11 @@ export function App({ version, serverUrl, splash = true, preview = true }) {
 
   return html`<${Box} flexDirection="column">
     <${Static} items=${m.log} key=${m.staticKey} children=${renderLogItem} />
+    ${m.settlingTurns.map(
+      ({ turn }) => html`<${Box} key=${turn.id} flexDirection="column" marginBottom=${1}>
+        <${Turn} turn=${turn} tick=${tick} />
+      </${Box}>`,
+    )}
     ${m.current
       ? html`<${Box} flexDirection="column" marginBottom=${1}>
           <${Turn} turn=${m.current} tick=${tick} />
