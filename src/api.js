@@ -56,6 +56,24 @@ export async function submitTurn(baseUrl, sessionId, message) {
   return ok(res, 202);
 }
 
+// Ask the Lumeri host for the same short AI summary used by the Video client's
+// session history. This is best-effort UI metadata: an older host or a title
+// generation failure must never block the actual Agent turn.
+export async function generateSessionTitle(baseUrl, sessionId, messages) {
+  try {
+    const res = await request(baseUrl, `/sessions/${encodeURIComponent(sessionId)}/auto_title`, {
+      method: "POST",
+      json: { messages },
+      timeoutMs: 25000,
+    });
+    if (res.status !== 200) return null;
+    const title = typeof res.json?.title === "string" ? res.json.title.trim() : "";
+    return title || null;
+  } catch {
+    return null;
+  }
+}
+
 // Fetch the backend model catalog (priority-ordered) + active selection.
 //   GET /model -> { slot, priority:[{id,label,provider}], efforts:[…], active }
 // Mirrors the web client's /model command (static/v3/v3.js).
@@ -73,6 +91,24 @@ export async function setModel(baseUrl, { model, effort } = {}) {
   if (effort !== undefined) json.effort = effort;
   const res = await request(baseUrl, "/model", { method: "POST", json });
   return ok(res, 200);
+}
+
+// Memory-aware starter suggestions for the empty composer (gemia
+// starter_recommendations.py → GET /starter-recommendations). Returns
+//   { status: "generating"|"ready"|"retry", personalized: bool,
+//     suggestions: [{label, prompt}] }
+// status "generating" means the backend is producing a personalized set in a
+// daemon thread — poll again. Best-effort: an older backend without the route
+// (404), a non-200, or any failure returns null so the caller keeps its
+// built-in defaults instead of surfacing an error.
+export async function getStarterRecommendations(baseUrl) {
+  try {
+    const res = await request(baseUrl, "/starter-recommendations", { timeoutMs: 6000 });
+    if (res.status !== 200) return null;
+    return res.json || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function listAssets(baseUrl, sessionId) {
@@ -124,6 +160,24 @@ export async function setPlanMode(baseUrl, sessionId, enabled) {
   const res = await request(baseUrl, `/sessions/${sessionId}/plan_mode`, {
     method: "POST",
     json: { enabled: !!enabled },
+  });
+  return ok(res, 200);
+}
+
+// Host sandbox toggle (gemia server /settings/sandbox). A process-global
+// setting (not per-session), no SSE event. `sandbox_disabled: true` means the
+// two-tier sandbox-exec boundary is OFF — Lumeri's run_shell/host tools get
+// full filesystem access (used for GPU/Blender work); false means protected.
+// Web parity: the Plus menu toggle + Settings → Safety (static/v3/v3.js).
+export async function getSandbox(baseUrl) {
+  const res = await request(baseUrl, "/settings/sandbox");
+  return ok(res, 200);
+}
+
+export async function setSandbox(baseUrl, disabled) {
+  const res = await request(baseUrl, "/settings/sandbox", {
+    method: "POST",
+    json: { disabled: !!disabled },
   });
   return ok(res, 200);
 }
@@ -186,18 +240,21 @@ export function assetUrl(baseUrl, sessionId, assetId) {
   return new URL(`/sessions/${sessionId}/assets/${assetId}`, baseUrl).toString();
 }
 
-// The read-only preview monitor (gemia static/v3/preview.html), attached to a
-// specific session. Served same-origin with the sidecar.
+// The preview is the canonical Lumeri Video workspace, attached read-only to
+// the session owned by the terminal. `mode=cli-preview` removes only the chat
+// surfaces; the preview, timeline, modules, styling, and interactions stay
+// identical to the 7788 Video UI.
 export function previewUrl(baseUrl, sessionId) {
-  const u = new URL("/video/preview.html", baseUrl);
+  const u = new URL("/video/", baseUrl);
+  u.searchParams.set("mode", "cli-preview");
   u.searchParams.set("session", sessionId);
   return u.toString();
 }
 
 export async function previewAvailable(baseUrl) {
   try {
-    const res = await request(baseUrl, "/video/preview.html", { timeoutMs: 3000 });
-    return res.status === 200;
+    const res = await request(baseUrl, "/video/v3.js", { timeoutMs: 3000 });
+    return res.status === 200 && res.text.includes('pageParams.get("mode") === "cli-preview"');
   } catch {
     return false;
   }

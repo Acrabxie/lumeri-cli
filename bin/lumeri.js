@@ -18,6 +18,7 @@ function parseArgs(argv) {
     server: DEFAULT_SERVER,
     help: false,
     version: false,
+    prompt: null,
     splash: !noSplashEnv,
     preview: !noPreviewEnv,
   };
@@ -25,6 +26,8 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "-h" || a === "--help") opts.help = true;
     else if (a === "-V" || a === "--version") opts.version = true;
+    else if (a === "-p" || a === "--prompt") opts.prompt = argv[++i] ?? "";
+    else if (a.startsWith("--prompt=")) opts.prompt = a.slice("--prompt=".length);
     else if (a === "-s" || a === "--server") opts.server = argv[++i];
     else if (a.startsWith("--server=")) opts.server = a.slice("--server=".length);
     else if (a === "--no-splash") opts.splash = false;
@@ -42,12 +45,14 @@ const HELP = `Lumeri CLI — a terminal client for the Lumeri v3 video-editing a
 
 Usage
   lumeri [options]
+  lumeri -p <prompt>                                     Run one full Lumeri Agent turn
   lumeri setup                                            Check the backend is ready (first-run guidance)
   lumeri login [google|email]                             Sign in (Google or email code)
   lumeri whoami | logout                                  Show / clear the signed-in account
-  lumeri codex <login|import|status|whoami|logout|chat>   Use ChatGPT subscription quota
+  lumeri codex <login|import|status|whoami|logout>        Manage optional Codex subscription auth
 
 Options
+  -p, --prompt <text> Run one non-interactive Lumeri Agent turn
   -s, --server <url>   Lumeri sidecar base URL (default: ${DEFAULT_SERVER})
       --no-splash      Skip the startup animation
       --no-preview     Don't auto-open the preview window
@@ -101,20 +106,23 @@ if (opts.version) {
   process.exit(0);
 }
 
-if (!process.stdin.isTTY || !process.stdout.isTTY) {
+if (opts.prompt != null) {
+  const { runPrompt } = await import("../src/prompt-cli.js");
+  process.exitCode = await runPrompt({ serverUrl: opts.server, prompt: opts.prompt });
+} else if (!process.stdin.isTTY || !process.stdout.isTTY) {
   process.stderr.write(
     "lumeri: this is an interactive TUI and needs a terminal (TTY).\n" +
       "Run it directly in your terminal, not through a pipe or non-interactive shell.\n",
   );
-  process.exit(1);
+  process.exitCode = 1;
+} else {
+  // Fresh canvas for the ceremony.
+  if (opts.splash) process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
+
+  const app = render(
+    html`<${App} version=${pkg.version} serverUrl=${opts.server} splash=${opts.splash} preview=${opts.preview} />`,
+    { exitOnCtrlC: false },
+  );
+
+  await app.waitUntilExit();
 }
-
-// Fresh canvas for the ceremony.
-if (opts.splash) process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
-
-const app = render(
-  html`<${App} version=${pkg.version} serverUrl=${opts.server} splash=${opts.splash} preview=${opts.preview} />`,
-  { exitOnCtrlC: false },
-);
-
-await app.waitUntilExit();

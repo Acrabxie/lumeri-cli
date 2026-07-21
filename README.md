@@ -11,7 +11,7 @@ The CLI is a pure client — it ships no model, keys, or media processing.
 
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  ✦ Lumeri  v0.1.0  ·  video-editing agent in your terminal   │
+│  ✦ Lumeri  v1.0.0  ·  video-editing agent in your terminal   │
 │                                                               │
 │  server   http://127.0.0.1:7788                               │
 │  • type to chat · /help for commands · /upload <path> …       │
@@ -53,6 +53,7 @@ source via [htm](https://github.com/developit/htm).
 
 ```sh
 lumeri                                   # connect to http://127.0.0.1:7788
+lumeri -p "剪掉开头三秒并导出"             # one full Agent turn, non-interactive
 lumeri --server http://127.0.0.1:8000    # custom sidecar
 LUMERI_SERVER=http://host:7788 lumeri    # via env
 lumeri --no-splash                        # skip the startup animation
@@ -61,10 +62,16 @@ node bin/lumeri.js                        # without npm link
 
 Launching plays a short ceremonial intro — the LUMERI wordmark scans in and the
 tagline types out (press any key to skip, or `--no-splash` / `LUMERI_NO_SPLASH=1`
-to disable). The sidecar is normally the launchd-managed `com.gemia.sidecar` on
-port 7788; the connection is established behind the animation.
+to disable). The Lumeri server normally listens on port 7788 and may be managed
+by launchd on local installations; the connection is established behind the
+animation.
 
-## Codex subscription backend (`lumeri codex`)
+`lumeri` and `lumeri -p` both use the sidecar's configured Lumeri Agent and
+provider priority. Neither command forces Codex. `-p` differs only in terminal
+presentation: it waits for one complete Agent turn, prints the final response,
+then exits without opening the TUI or preview.
+
+## Optional Codex subscription credentials (`lumeri codex`)
 
 Run a model on your **ChatGPT subscription's Codex quota** instead of metered
 API keys — the same mechanism the Codex CLI and tools like OpenClaw / OpenCode
@@ -78,7 +85,6 @@ account id, and usage is deducted from your plan's Codex limits.
 lumeri codex login              # sign in with ChatGPT in the browser
 lumeri codex import             # or reuse an existing `codex` CLI login (no browser)
 lumeri codex status             # plan, account, token expiry
-lumeri codex chat "explain this stack trace" --model gpt-5.5
 lumeri codex logout
 ```
 
@@ -106,8 +112,9 @@ provider above), `apikey` (metered last resort) — behind a `router` that fails
 over to the next provider when one is unavailable (auth/quota/5xx), while never
 switching mid-stream once tokens have started flowing.
 
-Nothing in the active path imports it — `lumeri codex` is unchanged. Enabling it
-later is a one-line change in [`src/providers/index.js`](src/providers/index.js).
+Neither the interactive CLI nor `lumeri -p` imports it; both delegate provider
+selection to the Lumeri sidecar. Enabling this local router later would require
+an explicit product decision, not an implicit Codex default.
 Covered by `test/providers.mjs` (in `npm test`).
 
 ## Slash commands
@@ -155,7 +162,8 @@ lumeri logout
   `google_oauth_client_id` on the sidecar (`~/.gemia/config.json` or
   `$GEMIA_GOOGLE_OAUTH_CLIENT_ID`).
 
-The status line shows who you're signed in as.
+The status line shows who you're signed in as. During a turn, its fixed-width
+bar-and-dot motion marks that Lumeri is working without moving the prompt.
 
 ### Shortcuts
 
@@ -165,26 +173,17 @@ The status line shows who you're signed in as.
 ## Preview window
 
 On launch, alongside the terminal, Lumeri opens a **preview window** in your
-browser — a read-only monitor (no input box; the terminal drives). It's the page
-`web/preview.html`, served same-origin by the sidecar at
-`/v3/preview.html?session=<id>` and attached to the same session. It shows the
-latest produced asset on a cinema stage, a filmstrip of every asset, live
-tool/progress activity, and a `final` badge on deliverables — all from the same
-SSE stream the terminal reads.
-
-Auto-open requires the page to be deployed into the sidecar's `static/v3` (it's
-served from disk, so no restart is needed):
-
-```sh
-npm run deploy-preview                 # copies web/preview.html into known static/v3 dirs
-npm run deploy-preview -- /path/to/gemia/static/v3   # explicit target
-```
+browser. It is the same 7788 **Lumeri Video** workspace at
+`/video/?mode=cli-preview&session=<id>`, attached to the terminal's session.
+CLI preview mode removes the chat input, conversation history, and account
+avatar; the preview canvas, timeline, workspace modules, styling, and behavior
+remain identical to the Video UI.
 
 Disable auto-open with `--no-preview` or `LUMERI_NO_PREVIEW=1`; reopen any time
-with `/preview`. (The terminal checks `/v3/preview.html` exists before opening,
-so it stays quiet if the page isn't deployed.)
+with `/preview`. The terminal checks that the connected sidecar supports the
+shared preview mode before opening it.
 
-## What it renders
+## What the terminal renders
 
 The SSE stream is rendered faithfully — no synthesized progress or status:
 
@@ -224,10 +223,11 @@ src/sse.js             SSE client with Last-Event-ID reconnect/replay
 src/markdown.js        compact Markdown → Ink renderer
 src/logo.js            LUMERI wordmark (figlet "ANSI Shadow")
 src/components/        Splash · Banner · Turn · ToolCall · InputBox · StatusLine · Notice
-web/preview.html       read-only preview monitor (deploy into sidecar static/v3)
+web/preview.html       legacy standalone preview retained for older sidecars
 scripts/mock-server.mjs   offline scripted v3 server
-scripts/install-preview.mjs  deploy preview.html into the sidecar
+scripts/install-preview.mjs  legacy preview.html deployment helper
 test/smoke.mjs         headless render assertions
 test/recovery.mjs      replay_gap recovery / FIFO queue / open validation
-test/preview.mjs       headless preview-page DOM assertions (jsdom)
+test/preview-mode.mjs  shared Video preview URL/support assertions
+test/preview.mjs       legacy standalone preview DOM assertions (jsdom)
 ```

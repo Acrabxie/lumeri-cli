@@ -164,8 +164,8 @@ export function ToolCall({ call }) {
   return html`<${Box} flexDirection="column" marginTop=${0}>
     <${Box}>
       <${Text} color=${bulletColor} dimColor=${!bulletColor}>${glyph.tool + " "}</${Text}>
-      <${Text} bold>${toolLabel(call.tool_name)}</${Text}>
-      ${argStr ? html`<${Text} dimColor>${"(" + argStr + ")"}</${Text}>` : null}
+      <${Text} bold>${call.activityText ? truncate(call.activityText, 160) : toolLabel(call.tool_name)}</${Text}>
+      ${!call.activityText && argStr ? html`<${Text} dimColor>${"(" + argStr + ")"}</${Text}>` : null}
     </${Box}>
     ${lines}
     <${Subagents} call=${call} />

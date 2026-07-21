@@ -164,7 +164,7 @@ const statusProps = {
 };
 
 // ── stories ──────────────────────────────────────────────────────────
-await shoot("01-banner", html`<${Banner} version="0.1.0" serverUrl="http://127.0.0.1:7788" />`);
+await shoot("01-banner", html`<${Banner} version="1.0.0" serverUrl="http://127.0.0.1:7788" />`);
 await shoot("02-turn", html`<${Turn} turn=${turn} tick=${3} />`);
 await shoot(
   "03-notices",

@@ -10,6 +10,8 @@ import { App } from "../src/App.js";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let streamRes = null;
 let eid = 0;
+let autoTitleBody = null;
+const terminalTitles = [];
 const send = (kind, extra = {}) => {
   if (!streamRes) return;
   eid += 1;
@@ -23,7 +25,7 @@ async function script() {
     send("model_text_delta", { delta: d });
   }
   send("model_tool_call_start", { call_id: "c1", tool_name: "color_grade" });
-  send("model_tool_call_ready", { call_id: "c1", args: { style: "warm" } });
+  send("model_tool_call_ready", { call_id: "c1", args: { style: "warm" }, activity_text: "正在把画面调成暖色调" });
   send("tool_exec_start", { call_id: "c1" });
   await sleep(60);
   send("tool_exec_progress", { call_id: "c1", percent: 90, message: "encoding" });
@@ -72,6 +74,15 @@ const server = http.createServer((req, res) => {
     });
   }
   if (method === "GET" && url.includes("/assets")) return j(200, { assets: [] });
+  if (method === "POST" && url === "/sessions/v3-t/auto_title") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      autoTitleBody = JSON.parse(body);
+      j(200, { title: "暖色调剪辑" });
+    });
+    return;
+  }
   if (method === "POST" && url.includes("/turn")) {
     req.resume();
     req.on("end", () => {
@@ -88,7 +99,13 @@ await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 const { lastFrame, frames, stdin, unmount } = render(
-  html`<${App} version="9.9.9" serverUrl=${base} splash=${false} preview=${false} />`,
+  html`<${App}
+    version="9.9.9"
+    serverUrl=${base}
+    splash=${false}
+    preview=${false}
+    onTerminalTitle=${(title) => terminalTitles.push(title)}
+  />`,
 );
 await sleep(500);
 stdin.write("grade it warm");
@@ -102,7 +119,11 @@ const must = [
   ["banner wordmark", "✦ Lumeri"],
   ["connected notice", "connected · session v3-t"],
   ["user echo", "grade it warm"],
-  ["tool call header", "color_grade"],
+  // c1 carries activity_text → the header shows the model's plain-language line
+  // instead of the raw verb (web parity, gemia 2026-07-15). c2 has none → it
+  // shows the friendly tool label ("Generate video"), proving the fallback.
+  ["tool activity_text header", "正在把画面调成暖色调"],
+  ["tool label fallback", "Generate video"],
   ["progress percent", "90%"],
   ["result summary", "Applied warm grade"],
   ["asset chip", "[v_002"],
@@ -113,6 +134,15 @@ const must = [
 ];
 for (const [label, needle] of must) {
   if (!all.includes(needle)) fail.push(`${label}: missing "${needle}"`);
+}
+if (autoTitleBody?.messages?.[0]?.content !== "grade it warm") {
+  fail.push("terminal title: auto_title did not receive the first user input");
+}
+if (!terminalTitles.includes("✦ Lumeri | grade it warm")) {
+  fail.push("terminal title: immediate first-input label missing");
+}
+if (!terminalTitles.includes("✦ Lumeri | 暖色调剪辑")) {
+  fail.push("terminal title: generated summary label missing");
 }
 
 unmount();

@@ -1,10 +1,10 @@
 // Multi-provider scaffolding — assembled but NOT WIRED into the CLI.
 //
-// Nothing in the active path (bin/lumeri.js, src/codex/cli.js) imports this.
-// `lumeri codex …` still goes straight to the single Codex provider. This module
-// exists so that, when we choose to enable it, switching Lumeri onto a
-// fail-over router across Vertex / Codex-subscription / API-key is a one-line
-// change here — not a rewrite. Until then it's dead, tested code by design.
+// Nothing in the interactive or `lumeri -p` path imports this. Both modes use
+// the sidecar's v3 Agent route, whose server configuration owns provider/model
+// selection. This module exists so an explicit future choice to enable a
+// fail-over router across Vertex / Codex-subscription / API-key remains a
+// narrow integration change, not a rewrite. Until then it is tested dormant code.
 import { createRouter } from "./router.js";
 import { codexProvider } from "./codex.js";
 import { vertexProvider } from "./vertex.js";

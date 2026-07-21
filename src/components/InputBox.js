@@ -12,7 +12,7 @@ const PLACEHOLDER = "Describe an edit — / for commands";
 const ANSWER_PLACEHOLDER = "Type your answer — /cancel to dismiss";
 const MENU_MAX = 6;
 
-export function InputBox({ onSubmit, history, answerMode = false }) {
+export function InputBox({ onSubmit, history, answerMode = false, starters = null }) {
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState(0);
   const [sel, setSel] = useState(0); // autocomplete highlight
@@ -192,6 +192,20 @@ export function InputBox({ onSubmit, history, answerMode = false }) {
         return;
       }
       return; // swallow other ctrl combos
+    }
+
+    // Empty-composer starter pick: on an empty line, 1–4 fills the composer with
+    // that suggestion (terminal parity of the web chip — fill, editable, then
+    // send). Once the line has any text, digits type normally.
+    if (starters && text === "" && /^[1-4]$/.test(input)) {
+      const pick = starters[Number(input) - 1];
+      if (pick && pick.prompt) {
+        setBoth(pick.prompt);
+        setSel(0);
+        histIndex.current = null;
+        escCleared.current = false;
+        return;
+      }
     }
 
     if (input) insert(input);

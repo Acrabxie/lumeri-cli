@@ -37,9 +37,10 @@ for (const [name, word] of newTools) {
 }
 
 // Unmapped names must pass through unchanged (no regression of the fallback).
-// Includes a name that resembles the new ops but is NOT mapped, to prove the
-// passthrough still holds after adding reverse / ripple_delete.
-for (const passthrough of ["color_grade", "set_unknown_op", "ripple_unknown"]) {
+// Uses names that resemble mapped ops/tools but are NOT mapped, to prove the
+// passthrough still holds after the label table was expanded to cover the
+// full backend tool surface.
+for (const passthrough of ["no_such_verb_xyz", "set_unknown_op", "ripple_unknown"]) {
   if (toolLabel(passthrough) !== passthrough) {
     fail.push(`passthrough: ${passthrough} should pass through unchanged, got ${JSON.stringify(toolLabel(passthrough))}`);
   }
@@ -50,6 +51,29 @@ for (const name of ["read_file", "write_file", "remember", "log_note"]) {
   const label = toolLabel(name);
   if (!label || label === name) {
     fail.push(`existing ${name}: lost its friendly label (got ${JSON.stringify(label)})`);
+  }
+}
+
+// The backend renamed the time verbs with a `lumen_` prefix; the CLI label
+// table drifted (bare aliases only). The prefixed names must now map — this
+// locks the drift fix so a future rename regression is caught.
+for (const [name, word] of [
+  ["lumen_set_lane", "Set lane"],
+  ["lumen_reverse", "Reverse"],
+  ["lumen_ripple_delete", "Ripple delete"],
+  ["lumen_time_remap", "Speed curve"],
+]) {
+  const label = toolLabel(name);
+  if (!label || label === name || !label.includes(word)) {
+    fail.push(`${name}: expected friendly label containing "${word}", got ${JSON.stringify(label)}`);
+  }
+}
+
+// Core creative verbs now carry friendly labels — the fallback shown when the
+// backend attaches no activity_text. Assert they no longer pass through raw.
+for (const name of ["color_grade", "edit_video", "export", "generate_image", "timeline_insert_clip"]) {
+  if (toolLabel(name) === name) {
+    fail.push(`creative ${name}: expected a friendly label, still raw`);
   }
 }
 

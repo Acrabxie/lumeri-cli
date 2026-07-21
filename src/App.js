@@ -11,6 +11,7 @@ import {
   createSession,
   getInfo,
   submitTurn,
+  generateSessionTitle,
   submitAskResponse,
   listAssets,
   listMediaLibrary,
@@ -18,6 +19,8 @@ import {
   listMediaAnnotations,
   getTimeline,
   setPlanMode,
+  getSandbox,
+  setSandbox,
   listTasks,
   killTask,
   closeSession,
@@ -27,6 +30,7 @@ import {
   previewAvailable,
   getModel,
   setModel,
+  getStarterRecommendations,
 } from "./api.js";
 import {
   getSession,
@@ -48,12 +52,21 @@ import { Turn } from "./components/Turn.js";
 import { InputBox } from "./components/InputBox.js";
 import { AskPrompt } from "./components/AskPrompt.js";
 import { StatusLine } from "./components/StatusLine.js";
+import { StarterSuggestions, DEFAULT_STARTERS } from "./components/StarterSuggestions.js";
+import { lumeriTerminalTitle, setTerminalTitle } from "./terminal-title.js";
 
 // When turn_error arrives without a following turn_wrapup, release busy after
 // this many ms so the UI never stays permanently wedged.
 const TURN_ERROR_GRACE_MS = 1000;
 
-export function App({ version, serverUrl, splash = true, preview = true, onTurnFinalized = null }) {
+export function App({
+  version,
+  serverUrl,
+  splash = true,
+  preview = true,
+  onTurnFinalized = null,
+  onTerminalTitle = setTerminalTitle,
+}) {
   const { exit } = useApp();
   const [, force] = useReducer((c) => c + 1, 0);
   const [tick, setTick] = useState(0);
@@ -91,6 +104,13 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
     // per discarded errored turn so its late wrapup is consumed instead of
     // manufacturing an empty turn or contaminating a newer active turn.
     discardedWrapups: 0,
+    // Empty-composer starter suggestions: built-in defaults until the backend's
+    // /starter-recommendations returns a personalized, memory-aware set.
+    starterSuggestions: DEFAULT_STARTERS,
+    // The tab title belongs to the runtime session: only its first accepted
+    // user turn names it. /new clears this and starts a new naming cycle.
+    firstUserMessage: null,
+    titleRequestSeq: 0,
   }).current;
 
   const sseRef = useRef(null);
@@ -109,6 +129,9 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
   }, [force, m]);
 
   const nextId = () => `n${m.idSeq++}`;
+  const updateTerminalTitle = (summary = "") => {
+    try { onTerminalTitle?.(lumeriTerminalTitle(summary)); } catch {}
+  };
   // Ink's <Static> only flushes new entries when the `items` prop is a NEW
   // reference, so the log is treated as immutable (append = fresh array).
   const addLog = (item) => {
@@ -308,6 +331,7 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
           tool_name: ev.tool_name || "tool",
           status: "pending",
           args: null,
+          activityText: null,
           progress: null,
           summary: null,
           previewAssetId: null,
@@ -324,7 +348,17 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
       }
       case "model_tool_call_ready": {
         const call = m.current?.callsById.get(ev.call_id);
-        if (call) call.args = ev.args;
+        if (call) {
+          call.args = ev.args;
+          // The backend may attach `activity_text`: a model-authored,
+          // user-facing line describing this action in plain language
+          // ("正在把开场节奏剪得更利落"). Web hides the raw verb/args in favor
+          // of it (gemia 2026-07-15 human-readable activity); the CLI does the
+          // same in ToolCall.js. Absent → fall back to the friendly tool label.
+          if (typeof ev.activity_text === "string" && ev.activity_text.trim()) {
+            call.activityText = ev.activity_text.trim();
+          }
+        }
         break;
       }
       case "tool_exec_start": {
@@ -733,7 +767,7 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
     if (!up) {
       m.conn = "offline";
       pushNotice("error", `Cannot reach Lumeri server at ${serverUrl}`, [
-        "Is the sidecar running?  launchctl is com.gemia.sidecar (port 7788).",
+        "Is the Lumeri server running on port 7788?  Check its launchd service.",
         "Override with --server <url> or $LUMERI_SERVER.  Then /retry.",
       ]);
       renderNow();
@@ -769,6 +803,28 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
     renderNow();
     try {
       await submitTurn(serverUrl, m.sessionId, msg);
+      if (m.firstUserMessage == null) {
+        const sessionId = m.sessionId;
+        const requestSeq = ++m.titleRequestSeq;
+        m.firstUserMessage = msg;
+
+        // Immediate useful label, then upgrade it to the host's real semantic
+        // summary. The sequence/session guards prevent an old slow response
+        // from renaming a newer /new session.
+        updateTerminalTitle(msg);
+        generateSessionTitle(serverUrl, sessionId, [
+          { role: "user", content: msg, timestamp: Date.now() },
+        ]).then((title) => {
+          if (
+            title &&
+            requestSeq === m.titleRequestSeq &&
+            sessionId === m.sessionId &&
+            msg === m.firstUserMessage
+          ) {
+            updateTerminalTitle(title);
+          }
+        });
+      }
     } catch (e) {
       if (e.code === "E_BUSY") {
         // The server still has a turn running. Re-queue (front) and retry soon
@@ -855,6 +911,41 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
       }
     } catch (e) {
       pushNotice("error", `plan mode toggle failed: ${e.message}`);
+    }
+  };
+
+  // Toggle the host sandbox (gemia /settings/sandbox), the terminal parity of
+  // the web Plus-menu / Settings→Safety switch. Global, no session needed.
+  //   /sandbox            → show current state
+  //   /sandbox on         → protected (sandbox_disabled=false)
+  //   /sandbox off        → full host access (sandbox_disabled=true)
+  const doSandbox = async (arg) => {
+    const sub = (arg || "").trim().toLowerCase();
+    const state = (r) =>
+      r.sandbox_disabled
+        ? "沙盒已关闭 — Lumeri 可完整访问主机"
+        : "沙盒已开启 — 工具在受限边界内运行";
+    if (sub === "") {
+      try {
+        pushNotice("info", state(await getSandbox(serverUrl)), [
+          "/sandbox on 开启保护 · /sandbox off 放开（如 GPU/Blender 场景）",
+        ]);
+      } catch (e) {
+        pushNotice("error", `读取沙盒状态失败: ${e.message}`);
+      }
+      return;
+    }
+    let disabled;
+    if (sub === "on") disabled = false;
+    else if (sub === "off") disabled = true;
+    else {
+      pushNotice("error", `unknown: /sandbox ${sub}`, ["usage: /sandbox [on|off]"]);
+      return;
+    }
+    try {
+      pushNotice("success", state(await setSandbox(serverUrl, disabled)));
+    } catch (e) {
+      pushNotice("error", `切换沙盒失败: ${e.message}`);
     }
   };
 
@@ -991,6 +1082,9 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
       case "plan":
         await doPlan(arg);
         break;
+      case "sandbox":
+        await doSandbox(arg);
+        break;
       case "model":
         await doModel(arg);
         break;
@@ -1025,6 +1119,9 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
     resetTurnState();
     m.sessionId = null;
     m.lastEventId = null;
+    m.firstUserMessage = null;
+    m.titleRequestSeq += 1;
+    updateTerminalTitle();
     clearTranscript();
     await init();
   };
@@ -1071,8 +1168,8 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
     });
   };
 
-  // The preview monitor window (same session, read-only). Auto-opened on launch
-  // unless disabled; reopen any time with /preview.
+  // The canonical Video workspace in CLI-preview mode (same session,
+  // read-only). Auto-opened on launch unless disabled; reopen with /preview.
   const openPreview = async ({ force = false } = {}) => {
     if (!m.sessionId) {
       if (force) pushNotice("error", "not connected — /retry first");
@@ -1086,7 +1183,7 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
       available = false;
     }
     if (!available) {
-      if (force) pushNotice("info", "preview UI not found on this server", [`expected ${serverUrl}/video/preview.html`]);
+      if (force) pushNotice("info", "this server does not support the shared Video preview yet", [`expected CLI preview mode at ${serverUrl}/video/`]);
       return;
     }
     const url = previewUrl(serverUrl, m.sessionId);
@@ -1600,6 +1697,7 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
 
   // ── lifecycle ────────────────────────────────────────────────────────
   useEffect(() => {
+    updateTerminalTitle();
     init();
     const animate = setInterval(() => {
       if (m.busy || m.conn !== "live") setTick((t) => t + 1);
@@ -1610,7 +1708,43 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
       if (m.ctrlCTimer) clearTimeout(m.ctrlCTimer);
       if (m.loginPoll) clearTimeout(m.loginPoll);
       if (m.turnErrorGrace) clearTimeout(m.turnErrorGrace);
+      m.titleRequestSeq += 1;
       if (sseRef.current) sseRef.current.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Poll the memory-aware starter suggestions once on mount. The backend returns
+  // built-in-equivalent defaults immediately and generates a personalized set in
+  // a daemon thread (status "generating" → poll again, matching
+  // static/v3/v3.js refreshStarterSuggestions). Best-effort: keeps the built-in
+  // defaults if the route is absent (older backend) or fails. Only a
+  // personalized set replaces the defaults, so nothing flickers when there is no
+  // durable memory or the CLI is signed out.
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+    const poll = async (attempt = 0) => {
+      const data = await getStarterRecommendations(serverUrl);
+      if (cancelled) return;
+      if (
+        data &&
+        data.personalized &&
+        Array.isArray(data.suggestions) &&
+        data.suggestions.length === 4
+      ) {
+        m.starterSuggestions = data.suggestions;
+        scheduleRender();
+      }
+      if (data && data.status === "generating" && attempt < 40) {
+        timer = setTimeout(() => poll(attempt + 1), 1500);
+        timer.unref?.();
+      }
+    };
+    poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1631,6 +1765,19 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
     return html`<${Splash} onDone=${() => setPhase("ready")} />`;
   }
 
+  // Empty-state welcome: starter suggestions show only before the first turn,
+  // when nothing is pending. Once a turn exists (log, current, or settling) they
+  // give way to the transcript — matching the web empty rail.
+  const showStarters =
+    !m.current &&
+    m.settlingTurns.length === 0 &&
+    !m.log.some((it) => it.type === "turn") &&
+    !m.busy &&
+    !m.pendingAsk &&
+    !m.pendingLogin &&
+    Array.isArray(m.starterSuggestions) &&
+    m.starterSuggestions.length === 4;
+
   return html`<${Box} flexDirection="column">
     <${Static} items=${m.log} key=${m.staticKey} children=${renderLogItem} />
     ${m.settlingTurns.map(
@@ -1644,7 +1791,13 @@ export function App({ version, serverUrl, splash = true, preview = true, onTurnF
         </${Box}>`
       : null}
     ${m.pendingAsk ? html`<${AskPrompt} ask=${m.pendingAsk} />` : null}
-    <${InputBox} onSubmit=${onSubmit} history=${m.history} answerMode=${!!m.pendingAsk || !!m.pendingLogin} />
+    ${showStarters ? html`<${StarterSuggestions} items=${m.starterSuggestions} />` : null}
+    <${InputBox}
+      onSubmit=${onSubmit}
+      history=${m.history}
+      answerMode=${!!m.pendingAsk || !!m.pendingLogin}
+      starters=${showStarters ? m.starterSuggestions : null}
+    />
     <${StatusLine}
       busy=${m.busy}
       statusWord=${m.statusWord}

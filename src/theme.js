@@ -47,10 +47,23 @@ export const glyph = {
   pointer: "❯", // selection cursor (autocomplete menu)
 };
 
-// Spinner frames — asterisk morph with eased ends (edge frames held an extra
-// tick). ✽ was cut: it is East-Asian-Width Ambiguous and would jitter the
-// status line on CJK terminals. The status line owns the app's one animation.
-export const spinnerFrames = ["·", "·", "✢", "✳", "✶", "✻", "✻", "✻", "✶", "✳", "✢"];
+// Working indicator frames: terminal-safe echo of the Lumeri mark's upper
+// half, a bar and dot that disconnect/rejoin without changing cell width.
+// The status line owns the app's one animation.
+export const spinnerFrames = [
+  "== o",
+  "=  o",
+  "   o",
+  "=  o",
+  "== o",
+  "===o",
+  "== o",
+  "=  o",
+  "   o",
+  "  =o",
+  " ==o",
+  "===o",
+];
 
 // Asset chip text, e.g. "[v_002 · video]". The kind is a word, not a hue —
 // media types no longer get their own colors.
