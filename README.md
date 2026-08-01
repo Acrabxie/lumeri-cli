@@ -36,6 +36,14 @@ Sure — let me warm-grade your clip.
 
 ## Install
 
+Install the published package globally:
+
+```sh
+npm install --global lumeri-cli
+```
+
+For local development from this repository:
+
 ```sh
 cd lumeri-cli
 npm install

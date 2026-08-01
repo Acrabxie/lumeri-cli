@@ -1,0 +1,3 @@
+# Local-only runtime and agent traces. Never ship these in the public package.
+.claude/
+token-usage.jsonl

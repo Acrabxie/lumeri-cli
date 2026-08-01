@@ -1,11 +1,35 @@
 {
   "name": "lumeri-cli",
   "version": "1.0.0",
-  "private": true,
   "description": "Lumeri CLI — a Claude Code–style terminal UI for the Lumeri v3 video-editing agent",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Acrabxie/lumeri-cli.git"
+  },
+  "homepage": "https://github.com/Acrabxie/lumeri-cli#readme",
+  "bugs": {
+    "url": "https://github.com/Acrabxie/lumeri-cli/issues"
+  },
+  "keywords": [
+    "lumeri",
+    "cli",
+    "video",
+    "video-editing",
+    "terminal"
+  ],
   "bin": {
     "lumeri": "bin/lumeri.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "scripts/mock-server.mjs",
+    "scripts/install-preview.mjs",
+    "web/preview.html"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=18"
