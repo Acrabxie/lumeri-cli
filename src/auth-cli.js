@@ -1,5 +1,5 @@
-// `lumeri login | logout | whoami` — sign in to your Lumeri account from the
-// terminal. Plain stdout (no Ink), mirroring `lumeri codex …` so it composes in
+// Product login/logout/whoami — sign in to your Lumeri account from the
+// terminal. Plain stdout (no Ink), mirroring the product Codex command so it composes in
 // scripts and runs before the TUI. Two methods, same as the web client:
 //   • Google   — opens the browser; the backend handles the loopback callback
 //   • Email    — a 6-digit one-time code mailed to the address
@@ -17,22 +17,25 @@ import {
   logout,
   accountLabel,
 } from "./auth.js";
+import { configuredServer } from "./runtime-config.js";
 
-const HELP = `lumeri login — sign in to your Lumeri account
+function helpFor(commandName, productLabel) {
+  return `${commandName} login — sign in to your Lumeri ${productLabel} account
 
 Usage:
-  lumeri login                 Choose Google or email one-time code
-  lumeri login google          Sign in with Google in the browser
-  lumeri login email [addr]    Sign in with a code mailed to you
-  lumeri whoami                Print the signed-in account
-  lumeri logout                Sign out
+  ${commandName} login                 Choose Google or email one-time code
+  ${commandName} login google          Sign in with Google in the browser
+  ${commandName} login email [addr]    Sign in with a code mailed to you
+  ${commandName} whoami                Print the signed-in account
+  ${commandName} logout                Sign out
 
 Options:
   -s, --server <url>           Lumeri sidecar URL
-                               (default: $LUMERI_SERVER or http://127.0.0.1:7788)
+                               (default: $LUMERI_SERVER or ~/.lumeri/config.toml)
       --no-browser             Print sign-in URLs instead of opening the browser
                                (also: $LUMERI_NO_BROWSER=1)
 `;
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -89,7 +92,7 @@ async function pollUntilSignedIn(baseUrl, prevId, { timeoutMs = 180000, interval
   return null;
 }
 
-async function googleLogin(baseUrl) {
+async function googleLogin(baseUrl, productLabel, commandName) {
   let start;
   try {
     start = await startGoogleLogin(baseUrl);
@@ -116,15 +119,15 @@ async function googleLogin(baseUrl) {
   const acct = await pollUntilSignedIn(baseUrl, prevId);
   if (!acct) {
     process.stdout.write(
-      "Timed out waiting for the browser sign-in.\n  Finish in the browser, then run `lumeri whoami`.\n",
+      `Timed out waiting for the browser sign-in.\n  Finish in the browser, then run \`${commandName} whoami\`.\n`,
     );
     return 1;
   }
-  process.stdout.write(`Signed in as ${accountLabel(acct)}.\n`);
+  process.stdout.write(`Signed in to Lumeri ${productLabel} as ${accountLabel(acct)}.\n`);
   return 0;
 }
 
-async function emailLogin(baseUrl, ask, presetEmail) {
+async function emailLogin(baseUrl, ask, presetEmail, productLabel, commandName) {
   let email = (presetEmail || "").trim();
   if (!email) {
     const entered = await ask("Email address: ");
@@ -162,19 +165,20 @@ async function emailLogin(baseUrl, ask, presetEmail) {
     try {
       const r = await verifyEmailLogin(baseUrl, email, code);
       const acct = r.account || (await getSession(baseUrl)).account;
-      process.stdout.write(`Signed in as ${accountLabel(acct) || email}.\n`);
+      process.stdout.write(`Signed in to Lumeri ${productLabel} as ${accountLabel(acct) || email}.\n`);
       return 0;
     } catch (e) {
       // E.g. "验证码不正确，还可尝试 N 次" / "验证码已过期，请重新获取".
       process.stdout.write(`${e.message}\n`);
     }
   }
-  process.stderr.write("Couldn't verify the code. Run `lumeri login` to try again.\n");
+  process.stderr.write(`Couldn't verify the code. Run \`${commandName} login\` to try again.\n`);
   return 1;
 }
 
-export async function run(argv) {
-  let baseUrl = process.env.LUMERI_SERVER || "http://127.0.0.1:7788";
+export async function run(argv, { product = "Video", commandName = "luvi" } = {}) {
+  const HELP = helpFor(commandName, product);
+  let baseUrl = configuredServer();
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -201,22 +205,22 @@ export async function run(argv) {
   try {
     if (cmd === "whoami") {
       const acct = (await getSession(baseUrl)).account;
-      process.stdout.write(acct ? `${accountLabel(acct)}  (${acct.account_id})\n` : "Not signed in. Run `lumeri login`.\n");
+      process.stdout.write(acct ? `Lumeri ${product}: ${accountLabel(acct)}  (${acct.account_id})\n` : `Not signed in. Run \`${commandName} login\`.\n`);
       return acct ? 0 : 1;
     }
     if (cmd === "logout") {
       await logout(baseUrl);
-      process.stdout.write("Signed out.\n");
+      process.stdout.write(`Signed out of Lumeri ${product}.\n`);
       return 0;
     }
     if (cmd === "login") {
       const method = (rest[1] || "").toLowerCase();
-      if (method === "google") return await googleLogin(baseUrl);
+      if (method === "google") return await googleLogin(baseUrl, product, commandName);
 
       const prompter = makePrompter();
       const ask = (q) => prompter.question(q);
       try {
-        if (method === "email") return await emailLogin(baseUrl, ask, rest[2]);
+        if (method === "email") return await emailLogin(baseUrl, ask, rest[2], product, commandName);
 
         // No method given → offer whatever the server supports.
         const session = await getSession(baseUrl).catch(() => ({}));
@@ -239,7 +243,9 @@ export async function run(argv) {
         const picked = await ask(`Choose 1-${methods.length} (default 1): `);
         const pick = (picked || "1").trim() || "1";
         const choice = methods[Number(pick) - 1] || methods[0];
-        return choice === "google" ? await googleLogin(baseUrl) : await emailLogin(baseUrl, ask);
+        return choice === "google"
+          ? await googleLogin(baseUrl, product, commandName)
+          : await emailLogin(baseUrl, ask, undefined, product, commandName);
       } finally {
         prompter.close();
       }

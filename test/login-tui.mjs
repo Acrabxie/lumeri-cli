@@ -18,6 +18,8 @@ const readBody = (req) =>
   });
 
 let active = null; // flipped by /auth/email/verify, read by /auth/session
+let sessionsCreated = 0;
+let sessionsClosed = 0;
 
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
@@ -26,7 +28,10 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify(o));
   };
   if (method === "GET" && url.startsWith("/health")) return j(200, { ok: true });
-  if (method === "POST" && url === "/sessions") return j(201, { session_id: "v3-login" });
+  if (method === "POST" && url === "/sessions") {
+    sessionsCreated += 1;
+    return j(201, { session_id: `v3-login-${sessionsCreated}` });
+  }
   if (method === "GET" && url.includes("/stream")) {
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     return; // hold the SSE channel open
@@ -34,7 +39,10 @@ const server = http.createServer(async (req, res) => {
   if (method === "GET" && /\/sessions\/[^/]+$/.test(url))
     return j(200, { session_id: "v3-login", assets: [], latest_event_id: 0 });
   if (method === "GET" && url.includes("/assets")) return j(200, { assets: [] });
-  if (method === "POST" && url.includes("/close")) return j(200, { closed: true });
+  if (method === "POST" && url.includes("/close")) {
+    sessionsClosed += 1;
+    return j(200, { closed: true });
+  }
 
   if (method === "GET" && url === "/auth/session")
     return j(200, {
@@ -56,16 +64,23 @@ const server = http.createServer(async (req, res) => {
     active = { account_id: "email_demo0001", provider: "email", email: String(b.email || "").toLowerCase(), email_verified: true };
     return j(200, { ok: true, account: active });
   }
+  if (method === "POST" && url === "/auth/logout") {
+    active = null;
+    return j(200, { ok: true });
+  }
   return j(404, { error: "not found" });
 });
 
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
-const { frames, stdin, unmount } = render(
-  html`<${App} version="9.9.9" serverUrl=${base} splash=${false} preview=${false} />`,
+const { frames, lastFrame, stdin, unmount } = render(
+  html`<${App} version="9.9.9" serverUrl=${base} splash=${false} preview=${false} authPollMs=${250} />`,
 );
-await sleep(500); // init: health → session → SSE → /auth/session
+await sleep(500); // init: health → /auth/session; signed out, so no session/SSE
+const startupFrame = lastFrame();
+if (!startupFrame.includes("Sign in required")) throw new Error("signed-out startup did not show the login-state UI");
+if (sessionsCreated !== 0) throw new Error(`signed-out startup created ${sessionsCreated} workspace session(s)`);
 stdin.write("/login");
 await sleep(40);
 stdin.write("\r");
@@ -81,7 +96,40 @@ await sleep(450); // startEmailLogin → code step
 stdin.write("123456");
 await sleep(40);
 stdin.write("\r");
-await sleep(500); // verifyEmailLogin → signed in
+await sleep(650); // verifyEmailLogin → auth recheck → session creation
+if (sessionsCreated !== 1) throw new Error(`sign-in should create one workspace session, got ${sessionsCreated}`);
+
+stdin.write("/logout");
+await sleep(40);
+stdin.write("\r");
+await sleep(500); // logout → close workspace → login-state UI
+if (active !== null) throw new Error("logout did not clear the active account");
+if (sessionsClosed !== 1) throw new Error(`logout should close one workspace session, got ${sessionsClosed}`);
+if (!lastFrame().includes("Sign in required") || !lastFrame().includes("Signed out")) {
+  throw new Error("logout did not return to the login-state UI");
+}
+
+// Sign in once more, then simulate logout from another Lumeri surface. The
+// active CLI must notice the missing account and leave its workspace too.
+stdin.write("/login email");
+await sleep(40);
+stdin.write("\r");
+await sleep(200);
+stdin.write("tester@demo.dev");
+await sleep(40);
+stdin.write("\r");
+await sleep(300);
+stdin.write("123456");
+await sleep(40);
+stdin.write("\r");
+await sleep(550);
+if (sessionsCreated !== 2) throw new Error(`second sign-in should create session 2, got ${sessionsCreated}`);
+active = null;
+await sleep(700);
+if (sessionsClosed !== 2) throw new Error(`external logout should close session 2, got ${sessionsClosed}`);
+if (!lastFrame().includes("Your Lumeri session ended") || !lastFrame().includes("Sign in required")) {
+  throw new Error("external logout did not return to the login-state UI");
+}
 
 const all = frames.join("\n");
 const fail = [];
@@ -92,6 +140,8 @@ const must = [
   ["email prompt", "sign in with an email code"],
   ["code sent", "code sent to tester@demo.dev"],
   ["signed in", "signed in as tester@demo.dev"],
+  ["signed out gate", "Signed out"],
+  ["external logout gate", "Your Lumeri session ended"],
 ];
 for (const [label, needle] of must) {
   if (!all.includes(needle)) fail.push(`${label}: missing "${needle}"`);
@@ -104,5 +154,5 @@ if (fail.length) {
   console.error("login-tui FAIL:\n  " + fail.join("\n  "));
   process.exit(1);
 }
-console.log(`login-tui: PASS — all ${must.length} sign-in states present`);
+console.log(`login-tui: PASS — ${must.length} states; signed-out session gate + logout return verified`);
 process.exit(0);

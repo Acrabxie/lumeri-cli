@@ -12,12 +12,16 @@ import { rawRequest } from "./net.js";
 import { secondsUntilExpiry } from "./jwt.js";
 import { refreshTokens } from "./oauth.js";
 import { load, save } from "./store.js";
+import { commandNameForProduct, currentProduct } from "../product.js";
 
 // Refresh the access_token if it's expired / within 5 min of expiry. Returns a
 // usable record. Persists rotated tokens to our store only.
 export async function ensureFreshToken(record) {
   const rec = record || load();
-  if (!rec?.tokens?.access_token) throw new Error("not logged in (run `lumeri codex login`)");
+  if (!rec?.tokens?.access_token) {
+    const commandName = commandNameForProduct(currentProduct());
+    throw new Error(`not logged in (run \`${commandName} codex login\`)`);
+  }
   const left = secondsUntilExpiry(rec.tokens.access_token);
   if (left !== null && left > 300) return rec;
   if (!rec.tokens.refresh_token) return rec; // can't refresh; let the call try anyway

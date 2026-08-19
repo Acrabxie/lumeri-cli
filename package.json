@@ -1,7 +1,7 @@
 {
   "name": "lumeri-cli",
   "version": "1.0.0",
-  "description": "Lumeri CLI — a Claude Code–style terminal UI for the Lumeri v3 video-editing agent",
+  "description": "Lumeri Video and Lumeri Quanta terminal clients for the Lumeri v3 runtime",
   "type": "module",
   "repository": {
     "type": "git",
@@ -19,7 +19,8 @@
     "terminal"
   ],
   "bin": {
-    "lumeri": "bin/lumeri.js"
+    "luvi": "bin/luvi.js",
+    "luqu": "bin/luqu.js"
   },
   "files": [
     "bin/",
@@ -35,15 +36,18 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node bin/lumeri.js",
+    "start": "node bin/luvi.js",
+    "start:quanta": "node bin/luqu.js",
     "mock": "node scripts/mock-server.mjs",
     "deploy-preview": "node scripts/install-preview.mjs",
-    "test": "node test/smoke.mjs && node test/terminal-title.mjs && node test/starter.mjs && node test/recovery.mjs && node test/preview-mode.mjs && node test/preview.mjs && node test/prompt.mjs && node test/codex.mjs && node test/providers.mjs && node test/auth.mjs && node test/login-tui.mjs && node test/ask.mjs && node test/format-labels.mjs && node test/slash.mjs && node test/model.mjs && node test/openai-bridge.mjs && node test/plan.mjs && node test/tasks.mjs && node test/contract.mjs && node test/setup.mjs && node test/spinner.mjs"
+    "test:ime": "node test/input-ime.mjs",
+    "test": "node test/smoke.mjs && node test/terminal-title.mjs && node test/starter.mjs && node test/recovery.mjs && node test/preview-mode.mjs && node test/preview.mjs && node test/prompt.mjs && node test/roughcut.mjs && node test/codex.mjs && node test/providers.mjs && node test/auth.mjs && node test/login-tui.mjs && node test/ask.mjs && node test/format-labels.mjs && node test/slash.mjs && node test/quanta.mjs && node test/luqu-file.mjs && node test/projects.mjs && node test/model.mjs && node test/openai-bridge.mjs && node test/plan.mjs && node test/tasks.mjs && node test/contract.mjs && node test/setup.mjs && node test/spinner.mjs && node test/runtime-config.mjs && node test/trusted-folders.mjs && node test/product-entrypoints.mjs"
   },
   "dependencies": {
     "htm": "^3.1.1",
     "ink": "^7.1.0",
-    "react": "^19.2.7"
+    "react": "^19.2.7",
+    "string-width": "^8.2.0"
   },
   "devDependencies": {
     "ink-testing-library": "^4.0.0",

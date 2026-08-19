@@ -4,6 +4,27 @@
 // "minimal" is not a valid effort for gpt-5.5 — requests with it get a 400 before upstream.
 export const VALID_EFFORTS = new Set(["none", "low", "medium", "high", "xhigh"]);
 
+// Convert the ChatGPT Codex model catalog into an OpenAI-compatible model list.
+// Codex's picker shows only visibility=list entries, ordered by server priority.
+export function normalizeCodexModels(payload) {
+  const raw = Array.isArray(payload?.models) ? [...payload.models] : [];
+  return raw
+    .filter((model) => model && typeof model.slug === "string" && model.slug && model.visibility === "list")
+    .sort((a, b) => {
+      const ap = Number.isFinite(a.priority) ? a.priority : Number.MAX_SAFE_INTEGER;
+      const bp = Number.isFinite(b.priority) ? b.priority : Number.MAX_SAFE_INTEGER;
+      return ap - bp || a.slug.localeCompare(b.slug);
+    })
+    .map((model) => ({
+      id: model.slug,
+      object: "model",
+      owned_by: "openai",
+      ...(typeof model.display_name === "string" && model.display_name
+        ? { name: model.display_name }
+        : {}),
+    }));
+}
+
 // Map "max" → "high"; other strings tested against VALID_EFFORTS.
 // Returns the canonical effort string or null for invalid input.
 export function normalizeEffort(raw) {
@@ -87,29 +108,62 @@ function partsToText(parts) {
 export function toResponsesBody(oai, effort, parallelToolCalls) {
   const instructions = [];
   const input = [];
-  for (const m of oai.messages || []) {
+  const messages = Array.isArray(oai.messages) ? oai.messages : [];
+  const callPositions = new Map();
+  const pairedFunctionCalls = new Set();
+  for (let index = 0; index < messages.length; index++) {
+    const message = messages[index] || {};
+    if (message.role === "assistant" && Array.isArray(message.tool_calls)) {
+      for (const toolCall of message.tool_calls) {
+        if (typeof toolCall?.id === "string" && toolCall.id) {
+          callPositions.set(toolCall.id, index);
+        }
+      }
+    } else if (message.role === "tool") {
+      const callId = typeof message.tool_call_id === "string" ? message.tool_call_id : "";
+      const callPosition = callPositions.get(callId);
+      if (callId && callPosition !== undefined && callPosition < index) {
+        pairedFunctionCalls.add(callId);
+      }
+    }
+  }
+  const knownFunctionCalls = new Set();
+  for (const m of messages) {
     const role = m.role;
     if (role === "system") {
       instructions.push(typeof m.content === "string" ? m.content : partsToText(m.content));
       continue;
     }
     if (role === "tool") {
-      input.push({
-        type: "function_call_output",
-        call_id: m.tool_call_id,
-        output: String(m.content ?? ""),
-      });
+      const callId = typeof m.tool_call_id === "string" ? m.tool_call_id : "";
+      // Chat Completions clients can hand us a truncated rolling history whose
+      // assistant tool-call row was dropped while its tool result survived.
+      // Responses rejects that whole request with "No tool call found...".
+      // Ignore only the protocol-orphaned output; paired calls remain intact.
+      if (callId && knownFunctionCalls.has(callId)) {
+        input.push({
+          type: "function_call_output",
+          call_id: callId,
+          output: String(m.content ?? ""),
+        });
+      }
       continue;
     }
     if (role === "assistant") {
       if (Array.isArray(m.tool_calls) && m.tool_calls.length) {
         for (const tc of m.tool_calls) {
+          const callId = typeof tc.id === "string" ? tc.id : "";
+          // Historical function calls must be complete pairs. A cancelled or
+          // truncated turn can leave the call without its output; Responses
+          // rejects the entire next request if either half is missing.
+          if (!callId || !pairedFunctionCalls.has(callId)) continue;
           input.push({
             type: "function_call",
-            call_id: tc.id,
+            call_id: callId,
             name: tc.function?.name,
             arguments: tc.function?.arguments || "{}",
           });
+          knownFunctionCalls.add(callId);
         }
       }
       const txt = typeof m.content === "string" ? m.content : partsToText(m.content);
@@ -142,12 +196,117 @@ export function toResponsesBody(oai, effort, parallelToolCalls) {
     store: false,
     reasoning: { effort, summary: "auto" },
   };
+  if (oai.service_tier === "fast" || oai.service_tier === "priority") {
+    // Codex calls the user-facing setting "fast"; the Responses wire contract
+    // calls the same subscription tier "priority".  Reasoning is untouched.
+    body.service_tier = "priority";
+  }
   if (tools.length) {
     body.tools = tools;
     body.tool_choice = oai.tool_choice || "auto";
     body.parallel_tool_calls = parallelToolCalls; // exact boolean, never omitted when tools present
   }
   return body;
+}
+
+// Build a streaming Responses API request for the Codex subscription's
+// image-generation capability.  The public OpenAI Images API is not the
+// subscription bridge's transport; the bridge invokes the Responses API's
+// built-in image_generation tool and converts the result back to an
+// OpenAI-compatible /v1/images/generations response for Lumeri.
+export function toResponsesImageBody(oai) {
+  const content = [{
+    type: "input_text",
+    text: String(oai?.prompt || "").trim(),
+  }];
+  for (const image of Array.isArray(oai?.input_images) ? oai.input_images : []) {
+    if (typeof image === "string" && image) {
+      content.push({ type: "input_image", image_url: image });
+    }
+  }
+
+  const tool = {
+    type: "image_generation",
+    action: oai?.action || "auto",
+    ...(oai?.size ? { size: String(oai.size) } : {}),
+    ...(oai?.quality ? { quality: String(oai.quality) } : {}),
+    ...(oai?.background ? { background: String(oai.background) } : {}),
+  };
+
+  return {
+    // The signed-in Codex model owns the subscription request. The image
+    // model is selected by the built-in image_generation tool, not by
+    // pretending that gpt-image-2 is a Codex chat model.
+    model: oai?.orchestrator_model || "gpt-5.6-sol",
+    input: [{ role: "user", content }],
+    tools: [tool],
+    tool_choice: { type: "image_generation" },
+    stream: true,
+    store: false,
+  };
+}
+
+export function extractImageGenerationResult(payload) {
+  const output = Array.isArray(payload?.output) ? payload.output : [];
+  for (const item of output) {
+    if (item?.type === "image_generation_call" && typeof item.result === "string" && item.result) {
+      return item.result;
+    }
+  }
+  return "";
+}
+
+export function createImageStreamMachine() {
+  return {
+    sawCompleted: false,
+    result: "",
+    usage: null,
+    error: null,
+  };
+}
+
+export function advanceImageStreamMachine(ev, state) {
+  if (!ev || state.error || state.sawCompleted) return;
+  if (ev.type === "response.failed" || ev.type === "error") {
+    state.error = sanitizeError(ev);
+    return;
+  }
+  if (ev.type === "response.output_item.done") {
+    state.result = extractImageGenerationResult({ output: [ev.item] }) || state.result;
+    return;
+  }
+  if (ev.type === "response.completed") {
+    state.result = extractImageGenerationResult(ev.response) || state.result;
+    state.usage = ev.response?.usage || null;
+    state.sawCompleted = true;
+  }
+}
+
+export function terminalImageStreamAction(state) {
+  if (state.error) return { terminal: "error", error: state.error };
+  if (!state.sawCompleted) {
+    return {
+      terminal: "stream_error",
+      error: {
+        message: "image stream ended without response.completed",
+        type: "stream_error",
+      },
+    };
+  }
+  if (!state.result) {
+    return {
+      terminal: "missing_image",
+      error: {
+        message: "codex image response contained no completed image",
+        type: "upstream_error",
+      },
+    };
+  }
+  return {
+    terminal: "success",
+    result: state.result,
+    usage: state.usage,
+  };
 }
 
 // Produce a sanitized, single-line error object from a response.failed/error event.

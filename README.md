@@ -1,7 +1,8 @@
-# Lumeri CLI
+# Lumeri Video and Quanta CLI
 
-A terminal client for the **Lumeri v3** video-editing agent, with a TUI modeled
-on Claude Code: a streaming chat transcript, live tool-call cards, FFmpeg
+A pair of product-scoped terminal clients for **Lumeri v3**: `luvi` for
+**Lumeri Video** and `luqu` for **Lumeri Quanta**. Both use a TUI modeled on
+Claude Code: a streaming chat transcript, live tool-call cards, FFmpeg
 progress bars, slash commands, and an inline input box — all rendered with
 [Ink](https://github.com/vadimdemedes/ink) (React for the terminal).
 
@@ -11,10 +12,8 @@ The CLI is a pure client — it ships no model, keys, or media processing.
 
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  ✦ Lumeri  v1.0.0  ·  video-editing agent in your terminal   │
-│                                                               │
-│  server   http://127.0.0.1:7788                               │
-│  • type to chat · /help for commands · /upload <path> …       │
+│  ● Lumeri Video  v1.0.0                                      │
+│  /help for commands · /upload <path> to add media             │
 ╰─────────────────────────────────────────────────────────────╯
 
 ✔ connected · session v3-660dd4f26ca8
@@ -47,12 +46,12 @@ For local development from this repository:
 ```sh
 cd lumeri-cli
 npm install
-npm link        # makes `lumeri` a real command on your PATH
+npm link        # makes `luvi` and `luqu` real commands on your PATH
 ```
 
-`npm link` symlinks `lumeri` into your global bin (e.g. `/opt/homebrew/bin`),
-so it's a genuine launch command resolved via PATH — not a shell alias. After
-that, just type **`lumeri`** in any terminal.
+`npm link` symlinks `luvi` and `luqu` into your global bin (e.g.
+`/opt/homebrew/bin`), so both are genuine launch commands resolved via PATH —
+not shell aliases. The old `lumeri` launch name is not published.
 
 Requires Node ≥ 18 (developed on Node 25). No build step — it runs straight from
 source via [htm](https://github.com/developit/htm).
@@ -60,26 +59,40 @@ source via [htm](https://github.com/developit/htm).
 ## Run
 
 ```sh
-lumeri                                   # connect to http://127.0.0.1:7788
-lumeri -p "剪掉开头三秒并导出"             # one full Agent turn, non-interactive
-lumeri --server http://127.0.0.1:8000    # custom sidecar
-LUMERI_SERVER=http://host:7788 lumeri    # via env
-lumeri --no-splash                        # skip the startup animation
-node bin/lumeri.js                        # without npm link
+luvi                                      # Lumeri Video on http://127.0.0.1:7788
+luqu                                      # Lumeri Quanta on the same runtime
+luvi -p "剪掉开头三秒并导出"                # one Video Agent turn
+luqu -p "把这个主题做成离散演示"             # one Quanta Agent turn
+luqu check ./museum-tour.luqu                 # validate an offline LUQU v1/v2 file
+luqu check --json ./museum-tour.luqu          # machine-readable graph/state report
+luvi --server http://127.0.0.1:8000       # custom sidecar
+LUMERI_SERVER=http://host:7788 luqu       # via env
+node bin/luvi.js                           # without npm link
+node bin/luqu.js
 ```
 
-Launching plays a short ceremonial intro — the LUMERI wordmark scans in and the
-tagline types out (press any key to skip, or `--no-splash` / `LUMERI_NO_SPLASH=1`
-to disable). The Lumeri server normally listens on port 7788 and may be managed
+Launching plays a short ceremonial LUMERI wordmark scan (press any key to skip,
+or `--no-splash` / `LUMERI_NO_SPLASH=1` to disable). The Lumeri server normally
+listens on port 7788 and may be managed
 by launchd on local installations; the connection is established behind the
 animation.
 
-`lumeri` and `lumeri -p` both use the sidecar's configured Lumeri Agent and
-provider priority. Neither command forces Codex. `-p` differs only in terminal
+`luvi`, `luqu`, and both `-p` forms use the sidecar's configured Lumeri Agent
+and provider priority. Neither command forces Codex. `-p` differs only in terminal
 presentation: it waits for one complete Agent turn, prints the final response,
-then exits without opening the TUI or preview.
+then exits without opening the TUI or preview. Every HTTP and SSE request carries
+the matching product identity, so Video and Quanta Projects/sessions stay isolated.
+The command surfaces are also product-specific: `luvi` exposes timeline and
+media-annotation commands, while `luqu` exposes the canonical discrete Quanta
+state tree and branches through `/quanta` and opens the Quanta player.
 
-## Optional Codex subscription credentials (`lumeri codex`)
+`luqu check` is intentionally local-only: it reads a `.luqu` NDJSON file without
+creating a session or contacting a model/server, checks the declared v1/v2
+structure, and reports video states plus interactive, automatic and looping
+edges. Unsupported v2 graph semantics exit non-zero rather than being presented
+as a linear file.
+
+## Optional Codex subscription credentials
 
 Run a model on your **ChatGPT subscription's Codex quota** instead of metered
 API keys — the same mechanism the Codex CLI and tools like OpenClaw / OpenCode
@@ -90,10 +103,11 @@ scraping, no simulated login. After signing in, requests go to
 account id, and usage is deducted from your plan's Codex limits.
 
 ```sh
-lumeri codex login              # sign in with ChatGPT in the browser
-lumeri codex import             # or reuse an existing `codex` CLI login (no browser)
-lumeri codex status             # plan, account, token expiry
-lumeri codex logout
+luvi codex login                # sign in with ChatGPT in the browser
+luvi codex import               # or reuse an existing `codex` CLI login
+luvi codex status               # plan, account, token expiry
+luvi codex logout
+# The same credential commands are available under `luqu codex ...`.
 ```
 
 Notes:
@@ -120,7 +134,7 @@ provider above), `apikey` (metered last resort) — behind a `router` that fails
 over to the next provider when one is unavailable (auth/quota/5xx), while never
 switching mid-stream once tokens have started flowing.
 
-Neither the interactive CLI nor `lumeri -p` imports it; both delegate provider
+Neither interactive product CLI nor its `-p` mode imports it; both delegate provider
 selection to the Lumeri sidecar. Enabling this local router later would require
 an explicit product decision, not an implicit Codex default.
 Covered by `test/providers.mjs` (in `npm test`).
@@ -130,15 +144,17 @@ Covered by `test/providers.mjs` (in `npm test`).
 | Command | Description |
 |---|---|
 | `/help` | Commands + keyboard shortcuts |
-| `/new` | Fresh session (clears the transcript) |
+| `/new` | Fresh session; stays inside the current Project |
+| `/project` | List Projects and the current Project's sessions |
+| `/project create <name> [--folder <path>]` | Create and enter a Project; the folder is optional |
+| `/project use <#\|name\|project_id>` | Enter an existing Project with a new session |
+| `/project resume <#\|session_id>` | Resume a durable session in the current Project |
+| `/project leave` | Leave the Project and start an independent Chat |
 | `/clear` | Clear the visible transcript (keep the session) |
 | `/upload <path>` | Upload a media file to the session |
 | `/assets` | List assets in the session |
 | `/preview` | (Re)open the preview window in your browser |
 | `/open <asset_id>` | Open a result asset in the system viewer |
-| `/timeline` | Show the current project timeline |
-| `/annotate <asset_id\|all>` | Gemini-annotate media-library videos |
-| `/annotations [asset_id]` | List media-library annotations |
 | `/session` | Session id, server, connection state |
 | `/retry` | Reconnect / recreate the session |
 | `/login` | Sign in — opens the web login page; `/login email` / `/login google` |
@@ -146,20 +162,47 @@ Covered by `test/providers.mjs` (in `npm test`).
 | `/account [switch <#\|id>]` | Show the active account / roster, or switch |
 | `/quit` | Exit |
 
+Video-only commands:
+
+| Command | Description |
+|---|---|
+| `/timeline` | Show the current Video project timeline |
+| `/annotate <asset_id\|all>` | Annotate media-library videos |
+| `/annotations [asset_id]` | List media-library annotations |
+
+Quanta-only commands:
+
+| Command | Description |
+|---|---|
+| `/quanta` | Show the canonical discrete state tree, branches, revision, and patch sequence |
+
+### Project workspaces
+
+A Project is one long-lived workspace, not a label on a single terminal
+session. Every CLI session inside it uses the same Project memory and logs,
+assets, editing storage, and timeline state. `/new` starts another session in
+that same workspace; `/project leave` is the explicit way back to an
+independent Chat. Project context stays isolated from every other Project.
+
 ### Accounts
 
 Lumeri data (memory, sessions, media) is scoped per account by the gemia
 sidecar, which holds the active-account session server-side
 (`~/.gemia/accounts/`) — no token is ever stored on the client. Two ways to sign
 in, both available inside the TUI (`/login`) and as a plain stdout command that
-runs before the app (`lumeri login`, like `lumeri codex login`):
+runs before the app (`luvi login` / `luqu login`):
+
+The interactive CLI is fail-closed: it verifies the active account before it
+creates a workspace session. Signed-out launches stay on the sign-in screen,
+and a logout from this CLI or another Lumeri surface closes the current CLI
+workspace and returns to that screen.
 
 ```
-lumeri login            # pick email code or Google
-lumeri login email      # a 6-digit code mailed to you
-lumeri login google     # browser Google sign-in
-lumeri whoami           # who's signed in
-lumeri logout
+luvi login              # Lumeri Video: pick email code or Google
+luvi login email        # a 6-digit code mailed to you
+luvi whoami             # who's signed in
+luvi logout
+luqu login              # the same flow, scoped to Lumeri Quanta
 ```
 
 - Email code: enter your address, the sidecar mails a 6-digit code (valid 10
@@ -180,12 +223,11 @@ bar-and-dot motion marks that Lumeri is working without moving the prompt.
 
 ## Preview window
 
-On launch, alongside the terminal, Lumeri opens a **preview window** in your
-browser. It is the same 7788 **Lumeri Video** workspace at
+On launch, `luvi` opens the 7788 **Lumeri Video** workspace at
 `/video/?mode=cli-preview&session=<id>`, attached to the terminal's session.
-CLI preview mode removes the chat input, conversation history, and account
-avatar; the preview canvas, timeline, workspace modules, styling, and behavior
-remain identical to the Video UI.
+`luqu` opens the **Lumeri Quanta** workspace at `/quanta`. Video CLI preview
+mode removes the duplicate chat surfaces while preserving the canonical Video
+canvas, timeline, modules, styling, and behavior.
 
 Disable auto-open with `--no-preview` or `LUMERI_NO_PREVIEW=1`; reopen any time
 with `/preview`. The terminal checks that the connected sidecar supports the
@@ -211,7 +253,7 @@ A scripted mock server speaks the same protocol so you can iterate offline:
 
 ```sh
 npm run mock                              # http://127.0.0.1:7799
-lumeri --server http://127.0.0.1:7799     # in another terminal
+luvi --server http://127.0.0.1:7799       # in another terminal
 ```
 
 ## Test
@@ -223,7 +265,9 @@ npm test     # headless render regression check
 ## Layout
 
 ```
-bin/lumeri.js          CLI entry (arg parsing, TTY guard, renders <App/>)
+bin/luvi.js            Lumeri Video launch entry
+bin/luqu.js            Lumeri Quanta launch entry
+bin/cli.js             shared arg parsing, TTY guard, and <App/> renderer
 src/App.js             session lifecycle, SSE dispatch, slash commands, state
 src/api.js             v3 HTTP wrappers
 src/http.js            loopback http/https (never proxied) + raw streaming

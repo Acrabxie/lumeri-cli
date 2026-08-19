@@ -8,7 +8,7 @@ import path from "node:path";
 
 const LUMERI_HOME = process.env.LUMERI_HOME || path.join(os.homedir(), ".lumeri");
 export const AUTH_PATH = path.join(LUMERI_HOME, "codex-auth.json");
-const CODEX_AUTH_PATH = path.join(os.homedir(), ".codex", "auth.json");
+const CODEX_AUTH_PATH = process.env.CODEX_AUTH_PATH || path.join(os.homedir(), ".codex", "auth.json");
 
 function readJson(p) {
   try {
@@ -18,12 +18,30 @@ function readJson(p) {
   }
 }
 
+function lastRefreshTs(record) {
+  const ts = record?.last_refresh;
+  const n = Date.parse(ts);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Prefer the freshest usable auth record between Lumeri-local and Codex CLI auth.
+// This keeps in-scope subscriptions aligned for account switches without forcing manual
+// re-import when the active ChatGPT account changes.
+function pickLatestAuthRecord(localRecord, codexRecord) {
+  if (!localRecord?.tokens?.access_token) return codexRecord;
+  if (!codexRecord?.tokens?.access_token) return localRecord;
+  return lastRefreshTs(codexRecord) > lastRefreshTs(localRecord) ? codexRecord : localRecord;
+}
+
 // A valid record looks like:
 //   { auth_mode:"chatgpt", OPENAI_API_KEY:null,
 //     tokens:{ id_token, access_token, refresh_token, account_id }, last_refresh }
 export function load() {
-  const d = readJson(AUTH_PATH);
-  return d?.tokens?.access_token ? d : null;
+  const localRecord = readJson(AUTH_PATH);
+  const codexRecord = readJson(CODEX_AUTH_PATH);
+  const chosen = pickLatestAuthRecord(localRecord, codexRecord);
+  if (chosen?.auth_mode !== "chatgpt" || !chosen?.tokens?.access_token) return null;
+  return chosen;
 }
 
 export function save(record) {

@@ -1,23 +1,26 @@
-// `lumeri codex <subcommand>` — manage optional ChatGPT/Codex credentials.
+// `<product command> codex <subcommand>` — manage optional ChatGPT/Codex credentials.
 // Plain stdout (no Ink) so it composes in scripts.
 import { createCodexProvider } from "./provider.js";
 import { browserOpenDisabled } from "../open.js";
 
-const HELP = `lumeri codex — use your ChatGPT subscription's Codex quota
+function helpFor(commandName) {
+  return `${commandName} codex — use your ChatGPT subscription's Codex quota
 
 Usage:
-  lumeri codex login            Sign in with ChatGPT in the browser (OAuth/PKCE)
-  lumeri codex import           Reuse an existing Codex CLI login (no browser)
-  lumeri codex status           Show login state, plan, token expiry
-  lumeri codex whoami           Refresh if needed and print account + plan
-  lumeri codex logout           Forget the stored tokens
+  ${commandName} codex login            Sign in with ChatGPT in the browser (OAuth/PKCE)
+  ${commandName} codex import           Reuse an existing Codex CLI login (no browser)
+  ${commandName} codex status           Show login state, plan, token expiry
+  ${commandName} codex whoami           Refresh if needed and print account + plan
+  ${commandName} codex logout           Forget the stored tokens
 `;
+}
 
 function fmtPlan(p) {
   return p ? p.toUpperCase() : "unknown";
 }
 
-export async function run(argv) {
+export async function run(argv, { commandName = "luvi" } = {}) {
+  const HELP = helpFor(commandName);
   // --no-browser anywhere on the line → print sign-in URLs instead of opening.
   argv = argv.filter((a) => {
     if (a === "--no-browser") {
@@ -41,8 +44,8 @@ export async function run(argv) {
         if (!s.loggedIn) {
           process.stdout.write("Not signed in.\n");
           if (s.codexLoginImportable)
-            process.stdout.write("A Codex CLI login exists — run `lumeri codex import` to reuse it.\n");
-          else process.stdout.write("Run `lumeri codex login`.\n");
+            process.stdout.write(`A Codex CLI login exists — run \`${commandName} codex import\` to reuse it.\n`);
+          else process.stdout.write(`Run \`${commandName} codex login\`.\n`);
           return 0;
         }
         const mins = s.accessTokenExpiresInSec != null ? Math.round(s.accessTokenExpiresInSec / 60) : "?";

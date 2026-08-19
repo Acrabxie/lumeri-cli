@@ -12,7 +12,7 @@ const CONN = {
   offline: { t: "offline", c: color.error },
 };
 
-export function StatusLine({ busy, statusWord, startedAt, now, tick, conn, queued, ctrlCArmed, account, planMode, tasks }) {
+export function StatusLine({ busy, statusWord, startedAt, now, tick, conn, queued, ctrlCArmed, account, planMode, tasks, projectName }) {
   const frame = spinnerFrames[tick % spinnerFrames.length];
   const cl = CONN[conn] || CONN.connecting;
   const who = account ? account.email || account.name || account.account_id : null;
@@ -36,6 +36,7 @@ export function StatusLine({ busy, statusWord, startedAt, now, tick, conn, queue
     <${Box}>${left}</${Box}>
     <${Box} gap=${3} flexShrink=${1}>
       ${!narrow && planMode ? html`<${Text} bold>plan mode</${Text}>` : null}
+      ${!narrow && projectName ? html`<${Text} bold>${`Project: ${projectName}`}</${Text}>` : null}
       ${!narrow && tasks > 0 ? html`<${Text} dimColor>${`tasks ×${tasks}`}</${Text}>` : null}
       ${!narrow && queued > 0 ? html`<${Text} dimColor>${`queued ×${queued}`}</${Text}>` : null}
       ${narrow

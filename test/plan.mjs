@@ -53,6 +53,8 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(o));
   };
   if (method === "GET" && url.startsWith("/health")) return j(200, { ok: true });
+  if (method === "GET" && url === "/auth/session")
+    return j(200, { account: { account_id: "test", email: "test@example.com" }, accounts: [] });
   if (method === "POST" && url === "/sessions") return j(201, { session_id: "v3-p" });
   if (method === "GET" && url.includes("/stream")) {
     res.writeHead(200, { "Content-Type": "text/event-stream" });

@@ -10,5 +10,3 @@ export const LOGO_LINES = [
 ];
 
 export const LOGO_WIDTH = Math.max(...LOGO_LINES.map((l) => l.length));
-
-export const TAGLINE = "✦ video-editing agent · in your terminal";

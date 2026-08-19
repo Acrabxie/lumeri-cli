@@ -1,21 +1,19 @@
 // Slash-command catalog. Names + descriptions live here so the autocomplete
 // menu and /help stay in sync; the actual behavior is wired in App.js.
 
-export const COMMANDS = [
+const SHARED_COMMANDS = [
   { name: "help", desc: "Show available commands and shortcuts" },
-  { name: "new", desc: "Start a fresh session (clears the transcript)" },
+  { name: "new", desc: "Start a fresh session (stays in the current Project)" },
+  { name: "project", desc: "Project workspace: list, create, use, resume, or leave", arg: "[create|use|resume|leave] …" },
+  { name: "trust", desc: "Trust a local folder before binding it to a Project", arg: "[path]" },
   { name: "clear", desc: "Clear the visible transcript (keeps the session)" },
   { name: "upload", desc: "Upload a media file: /upload <path>", arg: "<path>" },
   { name: "assets", desc: "List assets in the current session" },
   { name: "open", desc: "Open an asset in the system viewer: /open <asset_id>", arg: "<asset_id>" },
-  { name: "preview", desc: "Open the preview window for this session in your browser" },
-  { name: "timeline", desc: "Show the current project timeline" },
   { name: "tasks", desc: "Background shell jobs: /tasks [kill <job_id>]", arg: "[kill <job_id>]" },
-  { name: "annotate", desc: "Annotate media-library videos: /annotate <asset_id|all>", arg: "<asset_id|all>" },
-  { name: "annotations", desc: "List media-library annotations: /annotations [asset_id]", arg: "[asset_id]" },
   { name: "plan", desc: "Plan mode: /plan [on|off|approve] — 只规划不执行，批准后执行", arg: "[on|off|approve]" },
   { name: "sandbox", desc: "沙盒开关: /sandbox [on|off] — on 受限保护，off 放开主机权限", arg: "[on|off]" },
-  { name: "model", desc: "Switch model / thinking effort: /model [<id|#>] [effort]", arg: "[<id|#>] [effort]" },
+  { name: "model", desc: "Switch model, thinking effort, or Fast Mode", arg: "[<id|#> [effort] | fast on|off]" },
   { name: "session", desc: "Show session id, server, and connection state" },
   { name: "retry", desc: "Reconnect to the server / recreate the session" },
   { name: "setup", desc: "Check the backend is ready; first-run guidance" },
@@ -28,13 +26,35 @@ export const COMMANDS = [
   { name: "whoami", desc: "Show the current account", hidden: true },
 ];
 
+const VIDEO_COMMANDS = [
+  { name: "preview", desc: "Open the Video workspace for this session" },
+  { name: "timeline", desc: "Show the current project timeline" },
+  { name: "annotate", desc: "Annotate media-library videos: /annotate <asset_id|all>", arg: "<asset_id|all>" },
+  { name: "annotations", desc: "List media-library annotations: /annotations [asset_id]", arg: "[asset_id]" },
+];
+
+const QUANTA_COMMANDS = [
+  { name: "preview", desc: "Open the Quanta player" },
+  { name: "quanta", desc: "Show the discrete state tree, branches, and revision" },
+];
+
+// Keep COMMANDS as the Video catalog for existing imports while exposing a
+// genuinely product-shaped catalog to the two entrypoints. Quanta deliberately
+// does not inherit Video-only timeline and media-annotation commands.
+export const COMMANDS = [...SHARED_COMMANDS.slice(0, 9), ...VIDEO_COMMANDS, ...SHARED_COMMANDS.slice(9)];
+
+export function commandsForProduct(product = "video") {
+  const productCommands = product === "quanta" ? QUANTA_COMMANDS : VIDEO_COMMANDS;
+  return [...SHARED_COMMANDS.slice(0, 9), ...productCommands, ...SHARED_COMMANDS.slice(9)];
+}
+
 // Given the raw input line, return the command match state for autocomplete.
 // Active only while the line is a single `/token` with no space yet.
-export function autocompleteState(line) {
+export function autocompleteState(line, commands = COMMANDS) {
   if (!line.startsWith("/")) return null;
   if (line.includes(" ")) return null;
   const frag = line.slice(1).toLowerCase();
-  const matches = COMMANDS.filter(
+  const matches = commands.filter(
     (c) => !c.hidden && c.name.startsWith(frag),
   );
   if (matches.length === 0) return null;

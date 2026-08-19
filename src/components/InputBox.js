@@ -1,5 +1,6 @@
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useBoxMetrics, useCursor, useInput } from "ink";
 import { useState, useRef } from "react";
+import stringWidth from "string-width";
 import { html } from "../html.js";
 import { color, glyph } from "../theme.js";
 import { autocompleteState, menuScroll } from "../slash.js";
@@ -12,17 +13,49 @@ const PLACEHOLDER = "Describe an edit — / for commands";
 const ANSWER_PLACEHOLDER = "Type your answer — /cancel to dismiss";
 const MENU_MAX = 6;
 
-export function InputBox({ onSubmit, history, answerMode = false, starters = null }) {
+// Keep the terminal's *real* cursor inside the rendered composer. Apart from
+// making the editing point visible, this is what macOS input methods use to
+// place their pre-edit text and candidate window. Ink otherwise leaves the
+// physical cursor at the bottom of its frame, far below this component.
+const cursorAfter = (prefix, contentWidth) => {
+  let x = 0;
+  let y = 0;
+  const lines = prefix.split("\n");
+  for (const [index, line] of lines.entries()) {
+    const columns = x + stringWidth(line);
+    y += Math.floor(columns / contentWidth);
+    x = columns % contentWidth;
+    // A hard newline always starts the next visual line, including after a
+    // line that happened to wrap exactly at the right edge.
+    if (index < lines.length - 1) {
+      y += 1;
+      x = 0;
+    }
+  }
+  return { x, y };
+};
+
+export function InputBox({
+  onSubmit,
+  history,
+  commands,
+  answerMode = false,
+  starters = null,
+  placeholder: inputPlaceholder = PLACEHOLDER,
+}) {
   const [text, setText] = useState("");
   const [cursor, setCursor] = useState(0);
   const [sel, setSel] = useState(0); // autocomplete highlight
+  const boxRef = useRef(null);
+  const { left, top, width, hasMeasured } = useBoxMetrics(boxRef);
+  const { setCursorPosition } = useCursor();
   const histIndex = useRef(null); // null = editing live draft
   const draft = useRef("");
   const escCleared = useRef(false); // true right after Esc wiped the line
 
   const winStart = useRef(0); // first visible row of the autocomplete menu
 
-  const ac = autocompleteState(text);
+  const ac = autocompleteState(text, commands);
   const matches = ac ? ac.matches : [];
   const selClamped = matches.length ? Math.min(sel, matches.length - 1) : 0;
   winStart.current = matches.length
@@ -213,11 +246,26 @@ export function InputBox({ onSubmit, history, answerMode = false, starters = nul
 
   // Render text with an inverse-video cursor block.
   const showPlaceholder = text.length === 0;
-  const placeholder = answerMode ? ANSWER_PLACEHOLDER : PLACEHOLDER;
+  const placeholder = answerMode ? ANSWER_PLACEHOLDER : inputPlaceholder;
   const before = text.slice(0, cursor);
   const atRaw = text.slice(cursor, cursor + 1);
   const at = atRaw === "" || atRaw === "\n" ? " " : atRaw;
   const after = atRaw === "\n" ? "\n" + text.slice(cursor + 1) : text.slice(cursor + 1);
+
+  // The outer Box includes one border cell and one padding cell on each side.
+  // Its content starts with the single-cell prompt (`› `), then `before`.
+  // Use string-width rather than JS string length: CJK and emoji occupy more
+  // than one terminal column and must keep the IME anchored at the edit point.
+  if (hasMeasured) {
+    const contentWidth = Math.max(1, width - 4);
+    const relative = cursorAfter(glyph.user + " " + before, contentWidth);
+    setCursorPosition({
+      x: left + 2 + relative.x,
+      y: top + 1 + relative.y,
+    });
+  } else {
+    setCursorPosition(undefined);
+  }
 
   // Menu label column sized to the longest match so descriptions align and
   // nothing wraps mid-name; the selected row is inverse video (works on every
@@ -225,7 +273,7 @@ export function InputBox({ onSubmit, history, answerMode = false, starters = nul
   const labelOf = (c) => "/" + c.name + (c.arg ? " " + c.arg : "");
   const labelCol = matches.length ? Math.max(...matches.map((c) => labelOf(c).length)) + 2 : 0;
 
-  return html`<${Box} flexDirection="column">
+  return html`<${Box} ref=${boxRef} flexDirection="column">
     <${Box} borderStyle="round" borderColor=${color.accent} paddingX=${1}>
       <${Text} dimColor>${glyph.user + " "}</${Text}>
       ${showPlaceholder

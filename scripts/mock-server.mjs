@@ -7,7 +7,8 @@
 //   PORT=8123 node scripts/mock-server.mjs  # custom port
 //
 // Then, in another terminal:
-//   lumeri --server http://127.0.0.1:7799
+//   luvi --server http://127.0.0.1:7799
+//   luqu --server http://127.0.0.1:7799
 
 import http from "node:http";
 
@@ -481,6 +482,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, "127.0.0.1", () => {
   process.stdout.write(
     `mock Lumeri v3 server on http://127.0.0.1:${PORT}\n` +
-      `run:  lumeri --server http://127.0.0.1:${PORT}\n`,
+      `run:  luvi --server http://127.0.0.1:${PORT}\n` +
+      `      luqu --server http://127.0.0.1:${PORT}\n`,
   );
 });

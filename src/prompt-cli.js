@@ -1,4 +1,4 @@
-// Non-interactive `lumeri -p/--prompt` mode.
+// Non-interactive product `-p/--prompt` mode.
 //
 // This deliberately uses the same v3 session + SSE protocol as the Ink TUI.
 // Provider/model selection belongs to the Lumeri sidecar; this client never
@@ -53,10 +53,11 @@ export async function runPrompt({
   stderr = process.stderr,
   connectTimeoutMs = CONNECT_TIMEOUT_MS,
   handleSignals = true,
+  commandName = "luvi",
 } = {}) {
   const input = typeof prompt === "string" ? prompt.trim() : "";
   if (!input) {
-    writeLine(stderr, "lumeri: -p/--prompt requires a non-empty prompt");
+    writeLine(stderr, `${commandName}: -p/--prompt requires a non-empty prompt`);
     return 2;
   }
 
@@ -85,7 +86,7 @@ export async function runPrompt({
 
   try {
     if (!(await health(serverUrl).catch(() => false))) {
-      writeLine(stderr, `lumeri: cannot reach Lumeri server at ${serverUrl}`);
+      writeLine(stderr, `${commandName}: cannot reach Lumeri server at ${serverUrl}`);
       return 1;
     }
 
@@ -138,7 +139,7 @@ export async function runPrompt({
         case "ask_question":
           finish(
             2,
-            `Lumeri needs ${questionTitle(event.question)}; run \`lumeri\` interactively to answer it`,
+            `Lumeri needs ${questionTitle(event.question)}; run \`${commandName}\` interactively to answer it`,
           );
           break;
         case "replay_gap":
@@ -173,10 +174,10 @@ export async function runPrompt({
     if (finalAssetIds.length && stderr.isTTY) {
       writeLine(stderr, `produced: ${finalAssetIds.join(", ")}`);
     }
-    if (outcome.message) writeLine(stderr, `lumeri: ${outcome.message}`);
+    if (outcome.message) writeLine(stderr, `${commandName}: ${outcome.message}`);
     return outcome.code;
   } catch (error) {
-    writeLine(stderr, `lumeri: ${error.message}`);
+    writeLine(stderr, `${commandName}: ${error.message}`);
     return 1;
   } finally {
     if (terminalErrorTimer) clearTimeout(terminalErrorTimer);

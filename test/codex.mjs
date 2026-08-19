@@ -9,6 +9,9 @@ import path from "node:path";
 // that read it at import time.
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "lumeri-codex-"));
 process.env.LUMERI_HOME = TMP;
+// The production store may reuse ~/.codex/auth.json. Keep this offline test
+// hermetic so a real signed-in account can never affect assertions or output.
+process.env.CODEX_AUTH_PATH = path.join(TMP, "codex-auth.json");
 
 const { base64url, generatePkce, randomState } = await import("../src/codex/pkce.js");
 const { decodeClaims, secondsUntilExpiry, accountIdFrom, planTypeFrom } = await import("../src/codex/jwt.js");

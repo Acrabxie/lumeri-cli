@@ -1,10 +1,14 @@
 // Typed wrappers over the Lumeri v3 HTTP surface (see gemia/v3_routes.py).
-//   POST   /sessions                       -> create
+//   POST   /sessions                       -> create (optionally inside a Project)
 //   GET    /sessions/{id}                  -> info (assets, latest_event_id)
+//   POST   /sessions/{id}/resume           -> resume a durable Project session
+//   GET    /projects                       -> named Projects + sessions
+//   POST   /projects                       -> create a named Project
 //   POST   /sessions/{id}/turn             -> submit user message (202; 409 if busy)
 //   POST   /sessions/{id}/assets           -> upload (raw body + X-Filename)
 //   GET    /sessions/{id}/assets           -> list
 //   GET    /sessions/{id}/timeline         -> project timeline
+//   GET    /sessions/{id}/quanta           -> discrete state tree
 //   POST   /sessions/{id}/close            -> close
 
 import fs from "node:fs";
@@ -34,8 +38,35 @@ export async function health(baseUrl) {
   return res.status === 200;
 }
 
-export async function createSession(baseUrl) {
-  const res = await request(baseUrl, "/sessions", { method: "POST", timeoutMs: 8000 });
+export async function createSession(baseUrl, { projectId } = {}) {
+  const options = { method: "POST", timeoutMs: 8000 };
+  if (projectId) options.json = { project_id: projectId };
+  const res = await request(baseUrl, "/sessions", options);
+  return ok(res, 201);
+}
+
+export async function resumeSession(baseUrl, sessionId) {
+  const res = await request(baseUrl, `/sessions/${encodeURIComponent(sessionId)}/resume`, {
+    method: "POST",
+    json: {},
+    timeoutMs: 8000,
+  });
+  return ok(res, 200);
+}
+
+export async function listProjects(baseUrl) {
+  const res = await request(baseUrl, "/projects");
+  return ok(res, 200);
+}
+
+export async function createProject(baseUrl, { name = "", sourceRoot = "" } = {}) {
+  const json = { name: String(name || "").trim() };
+  if (String(sourceRoot || "").trim()) json.source_root = String(sourceRoot).trim();
+  const res = await request(baseUrl, "/projects", {
+    method: "POST",
+    json,
+    timeoutMs: 8000,
+  });
   return ok(res, 201);
 }
 
@@ -85,10 +116,11 @@ export async function getModel(baseUrl) {
 // Switch the active model and/or thinking effort. Send only the keys you want
 // to change; a value of null/"" resets that dimension to the backend default.
 //   POST /model { model?, effort? } -> { ok, slot, priority, efforts, active }
-export async function setModel(baseUrl, { model, effort } = {}) {
+export async function setModel(baseUrl, { model, effort, fastMode } = {}) {
   const json = {};
   if (model !== undefined) json.model = model;
   if (effort !== undefined) json.effort = effort;
+  if (fastMode !== undefined) json.fast_mode = fastMode;
   const res = await request(baseUrl, "/model", { method: "POST", json });
   return ok(res, 200);
 }
@@ -140,6 +172,22 @@ export async function listMediaAnnotations(baseUrl, assetId) {
   return ok(res, 200).annotations || [];
 }
 
+export async function startRoughcutPreparation(baseUrl, body) {
+  const res = await request(baseUrl, "/media-library/prepare", {
+    method: "POST",
+    json: { ...body, background: true },
+    timeoutMs: 30000,
+  });
+  return ok(res, 202);
+}
+
+export async function getRoughcutJob(baseUrl, jobId) {
+  const res = await request(baseUrl, `/media-library/prepare/${encodeURIComponent(jobId)}`, {
+    timeoutMs: 10000,
+  });
+  return ok(res, 200);
+}
+
 // Deliver the user's answer to a pending `ask_question` (elicit) back to the
 // session loop. Mirrors the web client (static/v3/v3.js showAskModal submit):
 //   POST /sessions/{id}/ask_response  { question_id, answers }
@@ -184,6 +232,11 @@ export async function setSandbox(baseUrl, disabled) {
 
 export async function getTimeline(baseUrl, sessionId) {
   const res = await request(baseUrl, `/sessions/${sessionId}/timeline`);
+  return ok(res, 200);
+}
+
+export async function getQuanta(baseUrl, sessionId) {
+  const res = await request(baseUrl, `/sessions/${sessionId}/quanta`);
   return ok(res, 200);
 }
 
@@ -244,15 +297,20 @@ export function assetUrl(baseUrl, sessionId, assetId) {
 // the session owned by the terminal. `mode=cli-preview` removes only the chat
 // surfaces; the preview, timeline, modules, styling, and interactions stay
 // identical to the 7788 Video UI.
-export function previewUrl(baseUrl, sessionId) {
+export function previewUrl(baseUrl, sessionId, { product = "video" } = {}) {
+  if (product === "quanta") return new URL("/quanta", baseUrl).toString();
   const u = new URL("/video/", baseUrl);
   u.searchParams.set("mode", "cli-preview");
   u.searchParams.set("session", sessionId);
   return u.toString();
 }
 
-export async function previewAvailable(baseUrl) {
+export async function previewAvailable(baseUrl, { product = "video" } = {}) {
   try {
+    if (product === "quanta") {
+      const res = await request(baseUrl, "/quanta", { timeoutMs: 3000 });
+      return res.status === 200;
+    }
     const res = await request(baseUrl, "/video/v3.js", { timeoutMs: 3000 });
     return res.status === 200 && res.text.includes('pageParams.get("mode") === "cli-preview"');
   } catch {

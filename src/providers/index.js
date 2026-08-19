@@ -1,6 +1,6 @@
 // Multi-provider scaffolding — assembled but NOT WIRED into the CLI.
 //
-// Nothing in the interactive or `lumeri -p` path imports this. Both modes use
+// Nothing in the interactive product CLI or its `-p` path imports this. Both modes use
 // the sidecar's v3 Agent route, whose server configuration owns provider/model
 // selection. This module exists so an explicit future choice to enable a
 // fail-over router across Vertex / Codex-subscription / API-key remains a

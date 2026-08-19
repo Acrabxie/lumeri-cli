@@ -25,6 +25,7 @@ const PRIORITY = [
 const EFFORTS = ["low", "medium", "high", "max"];
 let selectedModel = null; // null = default (index 0)
 let selectedEffort = null;
+let fastMode = false;
 
 const readBody = (req) =>
   new Promise((r) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => r(b)); });
@@ -37,6 +38,7 @@ const payload = () => {
     slot: "planner",
     priority: PRIORITY,
     efforts: EFFORTS,
+    fast_mode: { enabled: fastMode, available: true, effective: fastMode },
     active: {
       model, label, effort,
       is_default_model: !selectedModel,
@@ -65,6 +67,7 @@ const server = http.createServer(async (req, res) => {
         selectedModel = picked.id;
       }
     }
+    if ("fast_mode" in body) fastMode = body.fast_mode === true;
     return j(200, { ok: true, ...payload() });
   }
   j(404, { error: "not found" });
@@ -87,6 +90,13 @@ const base = `http://127.0.0.1:${server.address().port}`;
   ok(res.active.model === PRIORITY[1].id, "setModel by index selects priority[1]");
   ok(res.active.effort === "high", "setModel sets effort");
   ok(res.active.is_default_model === false, "override flagged non-default");
+}
+
+// Fast Mode is a separate transport tier; effort must stay unchanged.
+{
+  const res = await setModel(base, { fastMode: true });
+  ok(res.fast_mode.enabled === true, "setModel enables Fast Mode");
+  ok(res.active.effort === "high", "Fast Mode does not lower reasoning effort");
 }
 
 // Reset model, effort preserved

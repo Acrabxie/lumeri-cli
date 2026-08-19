@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 process.env.LUMERI_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "lumeri-prov-"));
+process.env.CODEX_AUTH_PATH = path.join(process.env.LUMERI_HOME, "codex-auth.json");
 delete process.env.OPENAI_API_KEY; // ensure apikey provider reports unavailable
 
 const { createRouter } = await import("../src/providers/router.js");

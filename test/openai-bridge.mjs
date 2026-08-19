@@ -7,15 +7,22 @@
 import assert from "node:assert/strict";
 import {
   VALID_EFFORTS,
+  normalizeCodexModels,
   normalizeEffort,
   resolveReasoning,
   resolveParallelToolCalls,
   toResponsesBody,
+  toResponsesImageBody,
+  extractImageGenerationResult,
+  createImageStreamMachine,
+  advanceImageStreamMachine,
+  terminalImageStreamAction,
   sanitizeError,
   createStreamMachine,
   advanceStreamMachine,
   terminalStreamAction,
 } from "../src/codex/openai-bridge-protocol.js";
+import { createBridgeAuthController } from "../src/codex/openai-bridge-auth.js";
 
 let passed = 0;
 const fail = [];
@@ -29,6 +36,52 @@ const ok = (name, fn) => {
     process.stdout.write(`  ✗ ${name}: ${e.message}\n`);
   }
 };
+
+// ── subscription model catalog ────────────────────────────────────────────────
+ok("normalizeCodexModels: picker-visible models are priority-sorted", () => {
+  assert.deepEqual(
+    normalizeCodexModels({
+      models: [
+        { slug: "hidden", display_name: "Hidden", visibility: "hide", priority: 0 },
+        { slug: "gpt-b", display_name: "GPT B", visibility: "list", priority: 2 },
+        { slug: "gpt-a", display_name: "GPT A", visibility: "list", priority: 1, supported_in_api: false },
+      ],
+    }),
+    [
+      { id: "gpt-a", object: "model", owned_by: "openai", name: "GPT A" },
+      { id: "gpt-b", object: "model", owned_by: "openai", name: "GPT B" },
+    ],
+  );
+});
+ok("normalizeCodexModels: malformed payload becomes an empty list", () => {
+  assert.deepEqual(normalizeCodexModels(null), []);
+  assert.deepEqual(normalizeCodexModels({ models: "bad" }), []);
+});
+
+// ── browser-initiated Codex re-login ────────────────────────────────────────
+await (async () => {
+  let finishLogin;
+  let loginCalls = 0;
+  const provider = {
+    status: () => ({ loggedIn: loginCalls > 0, email: "a@example.test", plan: "plus" }),
+    login: ({ onUrl }) => {
+      loginCalls += 1;
+      onUrl("https://auth.openai.com/oauth/authorize?state=test");
+      return new Promise((resolve) => { finishLogin = resolve; });
+    },
+  };
+  const auth = createBridgeAuthController(provider);
+  const started = await auth.start();
+  assert.equal(started.state, "waiting");
+  assert.equal(started.authorization_url, "https://auth.openai.com/oauth/authorize?state=test");
+  await assert.rejects(() => auth.start(), (error) => error.status === 409);
+  finishLogin();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(auth.status().state, "success");
+  assert.equal(auth.status().logged_in, true);
+  passed++;
+  process.stdout.write("  ✓ bridge auth: returns the login URL, blocks overlap, and reports success\n");
+})();
 
 // ── normalizeEffort ───────────────────────────────────────────────────────────
 ok("normalizeEffort: valid efforts pass through", () => {
@@ -167,6 +220,26 @@ ok("toResponsesBody: no tools → no tools/tool_choice/parallel_tool_calls in bo
   assert.ok(!("tool_choice" in body), "no tool_choice field");
   assert.ok(!("parallel_tool_calls" in body), "no parallel_tool_calls field");
 });
+ok("toResponsesBody: Fast Mode maps to priority without changing reasoning", () => {
+  const body = toResponsesBody(
+    {
+      messages: [{ role: "user", content: "hi" }],
+      service_tier: "fast",
+    },
+    "high",
+    false,
+  );
+  assert.equal(body.service_tier, "priority");
+  assert.deepEqual(body.reasoning, { effort: "high", summary: "auto" });
+});
+ok("toResponsesBody: standard mode omits service_tier", () => {
+  const body = toResponsesBody(
+    { messages: [{ role: "user", content: "hi" }] },
+    "high",
+    false,
+  );
+  assert.ok(!("service_tier" in body));
+});
 ok("toResponsesBody: with tools → parallel_tool_calls forwarded exactly", () => {
   const oai = {
     messages: [{ role: "user", content: "hi" }],
@@ -177,6 +250,67 @@ ok("toResponsesBody: with tools → parallel_tool_calls forwarded exactly", () =
   assert.strictEqual(bodyTrue.parallel_tool_calls, true, "true forwarded");
   const bodyFalse = toResponsesBody(oai, "high", false);
   assert.strictEqual(bodyFalse.parallel_tool_calls, false, "false forwarded");
+});
+ok("toResponsesImageBody: subscription image tool request uses required streaming", () => {
+  const body = toResponsesImageBody({
+    prompt: "a blue glass planet",
+    size: "1024x1024",
+    quality: "high",
+    input_images: ["data:image/png;base64,abc"],
+  });
+  assert.equal(body.model, "gpt-5.6-sol");
+  assert.equal(body.stream, true);
+  assert.equal(body.store, false);
+  assert.deepEqual(body.tool_choice, { type: "image_generation" });
+  assert.equal(body.tools[0].type, "image_generation");
+  assert.equal(body.tools[0].size, "1024x1024");
+  assert.equal(body.input[0].content[0].text, "a blue glass planet");
+  assert.equal(body.input[0].content[1].type, "input_image");
+});
+ok("extractImageGenerationResult: returns only completed image payload", () => {
+  assert.equal(
+    extractImageGenerationResult({ output: [{ type: "image_generation_call", result: "abc123" }] }),
+    "abc123",
+  );
+  assert.equal(extractImageGenerationResult({ output: [{ type: "message", content: [] }] }), "");
+});
+ok("image stream machine: accepts final output item only after response.completed", () => {
+  const state = createImageStreamMachine();
+  advanceImageStreamMachine(
+    {
+      type: "response.output_item.done",
+      item: { type: "image_generation_call", result: "image-base64" },
+    },
+    state,
+  );
+  assert.equal(terminalImageStreamAction(state).terminal, "stream_error");
+  advanceImageStreamMachine(
+    {
+      type: "response.completed",
+      response: { usage: { input_tokens: 3, output_tokens: 7, total_tokens: 10 } },
+    },
+    state,
+  );
+  assert.deepEqual(terminalImageStreamAction(state), {
+    terminal: "success",
+    result: "image-base64",
+    usage: { input_tokens: 3, output_tokens: 7, total_tokens: 10 },
+  });
+});
+ok("image stream machine: surfaces failure and rejects completed responses without an image", () => {
+  const failed = createImageStreamMachine();
+  advanceImageStreamMachine(
+    { type: "response.failed", response: { error: { message: "image blocked", type: "policy_error" } } },
+    failed,
+  );
+  assert.deepEqual(terminalImageStreamAction(failed), {
+    terminal: "error",
+    error: { message: "image blocked", type: "policy_error" },
+  });
+
+  const empty = createImageStreamMachine();
+  advanceImageStreamMachine({ type: "response.completed", response: { output: [] } }, empty);
+  assert.equal(terminalImageStreamAction(empty).terminal, "missing_image");
 });
 ok("toResponsesBody: tool message becomes function_call_output", () => {
   const body = toResponsesBody(
@@ -194,6 +328,72 @@ ok("toResponsesBody: tool message becomes function_call_output", () => {
   assert.ok(fco, "function_call_output present");
   assert.equal(fco.call_id, "c1");
   assert.equal(fco.output, '{"ok":true}');
+});
+ok("toResponsesBody: orphaned tool output from truncated history is dropped", () => {
+  const body = toResponsesBody(
+    {
+      messages: [
+        { role: "user", content: "continue" },
+        { role: "tool", tool_call_id: "orphan", content: '{"ok":true}' },
+        {
+          role: "assistant",
+          tool_calls: [
+            { id: "paired", type: "function", function: { name: "fn", arguments: "{}" } },
+          ],
+          content: null,
+        },
+        { role: "tool", tool_call_id: "paired", content: '{"ok":true}' },
+      ],
+    },
+    "medium",
+    false,
+  );
+  const outputs = body.input.filter((item) => item.type === "function_call_output");
+  assert.deepEqual(outputs.map((item) => item.call_id), ["paired"]);
+});
+ok("toResponsesBody: function call without a later output is dropped", () => {
+  const body = toResponsesBody(
+    {
+      messages: [
+        { role: "user", content: "go" },
+        {
+          role: "assistant",
+          tool_calls: [
+            { id: "complete", type: "function", function: { name: "fn", arguments: "{}" } },
+            { id: "missing-output", type: "function", function: { name: "fn", arguments: "{}" } },
+          ],
+          content: null,
+        },
+        { role: "tool", tool_call_id: "complete", content: '{"ok":true}' },
+        { role: "user", content: "continue" },
+      ],
+    },
+    "medium",
+    false,
+  );
+  const calls = body.input.filter((item) => item.type === "function_call");
+  const outputs = body.input.filter((item) => item.type === "function_call_output");
+  assert.deepEqual(calls.map((item) => item.call_id), ["complete"]);
+  assert.deepEqual(outputs.map((item) => item.call_id), ["complete"]);
+});
+ok("toResponsesBody: output that precedes its call does not form a pair", () => {
+  const body = toResponsesBody(
+    {
+      messages: [
+        { role: "tool", tool_call_id: "reversed", content: '{"ok":true}' },
+        {
+          role: "assistant",
+          tool_calls: [
+            { id: "reversed", type: "function", function: { name: "fn", arguments: "{}" } },
+          ],
+          content: null,
+        },
+      ],
+    },
+    "medium",
+    false,
+  );
+  assert.equal(body.input.some((item) => item.call_id === "reversed"), false);
 });
 ok("toResponsesBody: multiple system messages merged", () => {
   const body = toResponsesBody(

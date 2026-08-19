@@ -26,6 +26,7 @@ export const SCOPE = "openid profile email offline_access";
 // Data plane: the ChatGPT backend Responses endpoint. Calls here are billed to
 // the subscription's Codex quota, gated by the access_token + account id.
 export const RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
+export const MODELS_URL = "https://chatgpt.com/backend-api/codex/models";
 
 // id_token namespaced claim that carries chatgpt_account_id / chatgpt_plan_type.
 export const AUTH_CLAIM_NS = "https://api.openai.com/auth";
@@ -33,7 +34,7 @@ export const AUTH_CLAIM_NS = "https://api.openai.com/auth";
 // The backend keys behaviour off the originator; mimic the Codex CLI so the
 // subscription path is honoured.
 export const ORIGINATOR = "codex_cli_rs";
-export const CODEX_VERSION = "0.142.2";
+export const CODEX_VERSION = process.env.CODEX_CLIENT_VERSION || "0.145.0";
 export const USER_AGENT = `codex_cli_rs/${CODEX_VERSION} (lumeri-cli)`;
 
 // Default model on the subscription Responses path. ChatGPT-account Codex only

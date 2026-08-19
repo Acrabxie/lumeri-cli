@@ -5,9 +5,19 @@
 import http from "node:http";
 import https from "node:https";
 import { URL } from "node:url";
+import { currentProduct } from "./product.js";
 
 function lib(u) {
   return u.protocol === "https:" ? https : http;
+}
+
+function productHeaders(headers = {}, accept) {
+  const merged = { Accept: accept, ...headers };
+  const hasProduct = Object.keys(merged).some(
+    (name) => name.toLowerCase() === "x-lumeri-product",
+  );
+  if (!hasProduct) merged["X-Lumeri-Product"] = currentProduct();
+  return merged;
 }
 
 // JSON / raw-body / streamed request → resolves { status, headers, json, text }.
@@ -18,7 +28,7 @@ export function request(baseUrl, path, opts = {}) {
   const u = new URL(path, baseUrl);
 
   let payload = body;
-  const hdrs = { Accept: "application/json", ...headers };
+  const hdrs = productHeaders(headers, "application/json");
   if (json !== undefined) {
     payload = Buffer.from(JSON.stringify(json), "utf8");
     hdrs["Content-Type"] = "application/json; charset=utf-8";
@@ -74,7 +84,7 @@ export function openStream(baseUrl, path, { headers = {} } = {}) {
   return new Promise((resolve, reject) => {
     const req = lib(u).request(
       u,
-      { method: "GET", headers: { Accept: "text/event-stream", ...headers } },
+      { method: "GET", headers: productHeaders(headers, "text/event-stream") },
       (res) => resolve({ res, req }),
     );
     req.on("error", reject);

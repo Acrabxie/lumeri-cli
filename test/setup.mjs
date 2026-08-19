@@ -1,4 +1,4 @@
-// Tests for `lumeri setup` (src/setup-cli.js): the thin readiness check and its
+// Tests for product setup (src/setup-cli.js): the thin readiness check and its
 // shared first-run guidance. Boots a tiny inline server for the "ready" case and
 // hits a closed port for the "not reachable" case. No real backend, no network.
 import assert from "node:assert";
@@ -78,7 +78,7 @@ function close(server) {
 {
   const { code, out } = await capture(() => run(["--help"]));
   assert.equal(code, 0, "--help -> exit 0");
-  assert.ok(out.includes("lumeri setup"), "help mentions the command");
+  assert.ok(out.includes("luvi setup"), "help mentions the Video command");
   console.log("ok  --help prints usage");
 }
 

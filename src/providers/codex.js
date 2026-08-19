@@ -4,6 +4,7 @@
 import { createCodexProvider } from "../codex/provider.js";
 import { collect } from "./contract.js";
 import { classifyError, ProviderUnavailableError } from "./errors.js";
+import { commandNameForProduct, currentProduct } from "../product.js";
 
 // `inner` is injectable purely for testing the error-mapping glue without a
 // real login/network; production callers get the live createCodexProvider().
@@ -15,11 +16,12 @@ export function codexProvider(inner) {
     status() {
       const s = p.status();
       if (!s.loggedIn) {
+        const commandName = commandNameForProduct(currentProduct());
         return {
           available: false,
           reason: s.codexLoginImportable
-            ? "not logged in (run `lumeri codex import`)"
-            : "not logged in (run `lumeri codex login`)",
+            ? `not logged in (run \`${commandName} codex import\`)`
+            : `not logged in (run \`${commandName} codex login\`)`,
         };
       }
       // Expired access tokens are fine — the client auto-refreshes on use.
