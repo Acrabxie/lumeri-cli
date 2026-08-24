@@ -36,6 +36,20 @@ Sure — let me warm-grade your clip.
 
 ## Install
 
+The published product CLIs require Node.js 22 or newer. Install either or both
+packages globally:
+
+```sh
+npm install --global lumeri-video
+npm install --global lumeri-quanta
+```
+
+`lumeri-video` installs `luvi`; `lumeri-quanta` installs `luqu`. The packages
+can coexist, but do not install them globally alongside the legacy
+`lumeri-cli` bundle because its command names overlap.
+
+For local development of the legacy combined CLI from this repository:
+
 ```sh
 cd lumeri-cli
 npm install
@@ -46,8 +60,8 @@ npm link        # makes `lumeri` a real command on your PATH
 so it's a genuine launch command resolved via PATH — not a shell alias. After
 that, just type **`lumeri`** in any terminal.
 
-Requires Node ≥ 18 (developed on Node 25). No build step — it runs straight from
-source via [htm](https://github.com/developit/htm).
+The legacy checkout requires Node ≥ 18 (developed on Node 25). No build step —
+it runs straight from source via [htm](https://github.com/developit/htm).
 
 ## Run
 
