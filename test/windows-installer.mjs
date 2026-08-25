@@ -41,8 +41,8 @@ for (const spec of specs) {
   assert.equal(script.split(`$expectedSha256 = "${spec.sha256}"`).length - 1, 1);
   assert.equal(script.split('$packageVersion = "1.0.1"').length - 1, 1);
   assert.match(script, /\$env:OS -ne "Windows_NT"/);
-  assert.match(script, /Get-Command node\.exe/);
-  assert.match(script, /Get-Command npm\.cmd/);
+  assert.match(script, /\$nodeCommand = @\(Get-Command node\.exe[^\r\n]+\)\[0\]/);
+  assert.match(script, /\$npmCommand = @\(Get-Command npm\.cmd[^\r\n]+\)\[0\]/);
   assert.match(script, /\[int\]\$Matches\.major -lt 22/);
   assert.match(script, /Get-FileHash -LiteralPath \$archivePath -Algorithm SHA256/);
   assert.match(script, /install --global \$archivePath --ignore-scripts --no-audit --no-fund/);
@@ -54,7 +54,7 @@ for (const spec of specs) {
 }
 
 assert.equal((windowsSection.match(/\| iex/g) || []).length, 2);
-assert.match(workflow, /windows-irm-install:\n\s+runs-on: windows-latest/);
+assert.match(workflow, /windows-irm-install:\r?\n\s+runs-on: windows-latest/);
 assert.match(workflow, /\$env:npm_config_prefix = \$installPrefix/);
 for (const spec of specs) {
   assert.equal(workflow.split(spec.irm).length - 1, 1, `${spec.irm} must appear once in Windows CI`);

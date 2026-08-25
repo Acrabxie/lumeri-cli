@@ -13,8 +13,8 @@ if ($env:OS -ne "Windows_NT") {
     throw "This installer supports Windows only."
 }
 
-$nodeCommand = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue
-$npmCommand = Get-Command npm.cmd -CommandType Application -ErrorAction SilentlyContinue
+$nodeCommand = @(Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue)[0]
+$npmCommand = @(Get-Command npm.cmd -CommandType Application -ErrorAction SilentlyContinue)[0]
 if ($null -eq $nodeCommand -or $null -eq $npmCommand) {
     throw "Node.js 22 or newer, including npm, must be installed before Lumeri Quanta CLI."
 }
