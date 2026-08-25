@@ -15,11 +15,34 @@ publishable package has an explicit template and file allowlist under
 
 ## Install the CLIs
 
-The published CLIs require Node.js 22 or newer:
+The published CLIs require Node.js 22 or newer.
+
+### Windows (PowerShell)
+
+Windows installation is available only through the official `irm` entry
+points. Each installer downloads the pinned 1.0.1 archive from
+`cli.lumeri.io`, verifies its SHA-256 digest, disables package lifecycle
+scripts, and verifies the installed command shim.
+
+```powershell
+irm https://cli.lumeri.io/windows/install-video.ps1 | iex
+irm https://cli.lumeri.io/windows/install-quanta.ps1 | iex
+```
+
+### macOS and Linux
+
+Install from npm:
 
 ```sh
 npm install --global lumeri-video
 npm install --global lumeri-quanta
+```
+
+Or download the published package archives:
+
+```sh
+curl -fLO https://cli.lumeri.io/downloads/lumeri-video-1.0.1.tgz
+curl -fLO https://cli.lumeri.io/downloads/lumeri-quanta-1.0.1.tgz
 ```
 
 The packages may be installed together. Do not install them globally alongside

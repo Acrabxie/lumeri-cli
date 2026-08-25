@@ -45,6 +45,62 @@ jobs:
       - name: Reproduce split packages and verify compatibility payload
         run: npm run verify:packages:exact-split -- --out-dir "$RUNNER_TEMP/lumeri-pack"
 
+  windows-irm-install:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22.23.2
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+
+      - name: Pin npm 11.17.0
+        shell: powershell
+        run: npm.cmd install --global npm@11.17.0
+
+      - name: Verify Windows source contracts
+        shell: powershell
+        run: |
+          node.exe test/windows-installer.mjs
+          node.exe test/open-security.mjs
+          node.exe test/product-entrypoints.mjs
+
+      - name: Parse Windows PowerShell installers
+        shell: powershell
+        run: |
+          $failed = $false
+          Get-ChildItem -LiteralPath install/windows -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -ne 0) {
+              $failed = $true
+              $errors | ForEach-Object { Write-Error $_ }
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Install both public CLIs through irm
+        shell: powershell
+        run: |
+          $installPrefix = Join-Path $env:RUNNER_TEMP "lumeri-irm-install"
+          $env:npm_config_prefix = $installPrefix
+          irm https://cli.lumeri.io/windows/install-video.ps1 | iex
+          irm https://cli.lumeri.io/windows/install-quanta.ps1 | iex
+
+          & (Join-Path $installPrefix "luvi.cmd") --help
+          if ($LASTEXITCODE -ne 0) { throw "luvi --help failed after irm installation" }
+          & (Join-Path $installPrefix "luqu.cmd") --help
+          if ($LASTEXITCODE -ne 0) { throw "luqu --help failed after irm installation" }
+
   reproduce-compatibility-package:
     runs-on: ubuntu-latest
     timeout-minutes: 10
