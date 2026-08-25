@@ -33,7 +33,7 @@ const specs = [
 
 for (const spec of specs) {
   const script = read(spec.file);
-  assert.ok(script.startsWith("#Requires -Version 5.1\n"), `${spec.file} must support Windows PowerShell 5.1`);
+  assert.match(script, /^#Requires -Version 5\.1\r?\n/, `${spec.file} must support Windows PowerShell 5.1`);
   assert.equal(readme.split(spec.irm).length - 1, 1, `${spec.irm} must appear once in README`);
   assert.equal(script.split(`$packageName = "${spec.packageName}"`).length - 1, 1);
   assert.equal(script.split(`$commandName = "${spec.commandName}"`).length - 1, 1);
