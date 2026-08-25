@@ -1,5 +1,7 @@
 node_modules/
+dist/
+coverage/
+*.tgz
 *.log
 .DS_Store
 _smoke*.mjs
-src/codex/token-usage.jsonl

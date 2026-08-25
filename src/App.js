@@ -1,6 +1,6 @@
 import { Box, Static, useApp, useInput } from "ink";
 import { useEffect, useReducer, useRef, useState, useCallback } from "react";
-import { browserOpenDisabled, openInBrowser } from "./open.js";
+import { openInBrowser } from "./open.js";
 import { html } from "./html.js";
 import { color } from "./theme.js";
 import { pickStatusWord } from "./spinner.js";
@@ -9,6 +9,9 @@ import { PROTOCOL_VERSION } from "./contract.js";
 import {
   health,
   createSession,
+  resumeSession,
+  listProjects,
+  createProject,
   getInfo,
   submitTurn,
   generateSessionTitle,
@@ -18,6 +21,7 @@ import {
   annotateMediaLibrary,
   listMediaAnnotations,
   getTimeline,
+  getQuanta,
   setPlanMode,
   getSandbox,
   setSandbox,
@@ -28,21 +32,16 @@ import {
   assetUrl,
   previewUrl,
   previewAvailable,
-  getModel,
-  setModel,
   getStarterRecommendations,
 } from "./api.js";
-import {
-  getSession,
-  startGoogleLogin,
-  startEmailLogin,
-  verifyEmailLogin,
-  logout,
-  switchAccount,
-  accountLabel,
-} from "./auth.js";
 import { SseClient } from "./sse.js";
-import { parseSlash } from "./slash.js";
+import { commandsForProduct, parseSlash } from "./slash.js";
+import {
+  parseProjectCommand,
+  selectProject,
+  selectProjectSession,
+  visibleProjects,
+} from "./projects.js";
 import { setupGuidance } from "./setup-cli.js";
 import { toPendingAsk, buildAnswers } from "./ask.js";
 import { Banner } from "./components/Banner.js";
@@ -54,16 +53,24 @@ import { AskPrompt } from "./components/AskPrompt.js";
 import { StatusLine } from "./components/StatusLine.js";
 import { StarterSuggestions, DEFAULT_STARTERS } from "./components/StarterSuggestions.js";
 import { lumeriTerminalTitle, setTerminalTitle } from "./terminal-title.js";
+import { canonicalFolderPath, isTrustedFolder, trustFolder } from "./trusted-folders.js";
 
 // When turn_error arrives without a following turn_wrapup, release busy after
 // this many ms so the UI never stays permanently wedged.
 const TURN_ERROR_GRACE_MS = 1000;
+const MAX_RETAINED_RUNTIME_BYTES = 16 * 1024 * 1024;
 
 export function App({
   version,
   serverUrl,
   splash = true,
   preview = true,
+  product = "video",
+  commandName = "luvi",
+  isFolderTrusted = isTrustedFolder,
+  canonicalizeFolder = canonicalFolderPath,
+  trust = trustFolder,
+  maxRetainedRuntimeBytes = MAX_RETAINED_RUNTIME_BYTES,
   onTurnFinalized = null,
   onTerminalTitle = setTerminalTitle,
 }) {
@@ -71,6 +78,7 @@ export function App({
   const [, force] = useReducer((c) => c + 1, 0);
   const [tick, setTick] = useState(0);
   const [phase, setPhase] = useState(splash ? "splash" : "ready");
+  const commandCatalog = commandsForProduct(product);
 
   const m = useRef({
     log: [{ type: "banner", id: "banner" }],
@@ -79,6 +87,7 @@ export function App({
     busy: false,
     conn: "connecting",
     sessionId: null,
+    project: null, // named user Project; null means an independent Chat
     lastEventId: null,
     queued: [], // FIFO of messages typed while a turn is running
     statusWord: "Rendering",
@@ -88,11 +97,7 @@ export function App({
     idSeq: 1,
     throttleTimer: null,
     ctrlCTimer: null,
-    account: null, // active gemia account (from /auth/session), or null = signed out
-    loginPoll: null, // setTimeout handle for the post-/login session poll
-    loginSeq: 0, // bumped to cancel a stale login poll (newer /login or /logout wins)
     pendingAsk: null, // active ask_question awaiting the user's answer (elicit), or null
-    pendingLogin: null, // active email-code sign-in: { step: "email"|"sending"|"code", email? }
     planMode: false, // mirrors the backend per-session plan-mode flag
     backgroundTasks: new Map(), // job_id → background shell task (run_in_background run_shell)
     turnErrorGrace: null, // setTimeout handle: fires if turn_wrapup never follows turn_error
@@ -104,14 +109,24 @@ export function App({
     // per discarded errored turn so its late wrapup is consumed instead of
     // manufacturing an empty turn or contaminating a newer active turn.
     discardedWrapups: 0,
-    // Empty-composer starter suggestions: built-in defaults until the backend's
-    // /starter-recommendations returns a personalized, memory-aware set.
-    starterSuggestions: DEFAULT_STARTERS,
+    // Video keeps its current edit starters. Quanta stays neutral until its
+    // backend has product-specific recommendations; never show Video tasks in
+    // the Quanta terminal merely because the two clients share this shell.
+    starterSuggestions: product === "quanta" ? [] : DEFAULT_STARTERS,
     // The tab title belongs to the runtime session: only its first accepted
     // user turn names it. /new clears this and starts a new naming cycle.
     firstUserMessage: null,
     titleRequestSeq: 0,
+    // Count the serialized Runtime events retained by this session. This is a
+    // conservative ceiling: even fields that are only transient still count,
+    // so a peer cannot grow one long transcript without bound via tiny events.
+    retainedRuntimeBytes: 0,
   }).current;
+
+  const retainedRuntimeByteLimit = Number.isSafeInteger(maxRetainedRuntimeBytes) &&
+    maxRetainedRuntimeBytes > 0
+    ? maxRetainedRuntimeBytes
+    : MAX_RETAINED_RUNTIME_BYTES;
 
   const sseRef = useRef(null);
   const dirty = useRef(false);
@@ -505,6 +520,22 @@ export function App({
         });
         break;
       }
+      case "budget_update": {
+        m.budget = ev.budget || m.budget || null;
+        break;
+      }
+      case "budget_warning": {
+        m.budget = ev.budget || m.budget || null;
+        const t = ensureCurrent();
+        const warning = Number(ev.budget?.warning_usd || 0);
+        t.banners.push({
+          kind: "budget",
+          text: warning > 0
+            ? `消费已达到警示值 $${warning.toFixed(2)}`
+            : "消费已达到警示值",
+        });
+        break;
+      }
       case "plan_gate": {
         // A mutating tool was blocked by plan mode — mirror the budget_gate
         // treatment (web: static/v3/v3.js plan_gate handler).
@@ -696,6 +727,33 @@ export function App({
       scheduleRender();
     });
     sse.on("event", (ev) => {
+      const eventBytes = Buffer.byteLength(JSON.stringify(ev), "utf8");
+      if (m.retainedRuntimeBytes + eventBytes > retainedRuntimeByteLimit) {
+        // This is a hard failure, never silent truncation. Stop the hostile or
+        // runaway stream before retaining the event, close any visible turn,
+        // and require an explicit retry/new session to obtain a fresh budget.
+        sse.stop();
+        m.conn = "offline";
+        if (m.turnErrorGrace) {
+          clearTimeout(m.turnErrorGrace);
+          m.turnErrorGrace = null;
+        }
+        if (m.current) {
+          m.current.banners.push({
+            kind: "turn_error",
+            text: "Runtime stream stopped: transcript memory limit exceeded",
+          });
+          finalizeCurrent();
+        }
+        resetTurnState({ keepQueue: true });
+        m.pendingAsk = null;
+        pushNotice("error", "Runtime stream stopped at the local transcript memory limit", [
+          "Use /retry to start a fresh bounded session.",
+        ]);
+        scheduleRender();
+        return;
+      }
+      m.retainedRuntimeBytes += eventBytes;
       try {
         handleEvent(ev);
       } catch {
@@ -704,7 +762,26 @@ export function App({
       m.lastEventId = sse.lastEventId;
       scheduleRender();
     });
-    sse.on("error", () => scheduleRender());
+    sse.on("error", (error) => {
+      if (error?.status === 401 || error?.status === 403) {
+        m.conn = "offline";
+        if (m.turnErrorGrace) {
+          clearTimeout(m.turnErrorGrace);
+          m.turnErrorGrace = null;
+        }
+        if (m.current && m.busy) {
+          m.current.banners.push({ kind: "turn_error", text: "Runtime authorization denied" });
+          finalizeCurrent();
+          m.busy = false;
+          m.turnStartedAt = 0;
+          m.pendingAsk = null;
+        }
+        pushNotice("error", "Runtime authorization denied", [
+          "Open the installed Lumeri product to grant access, then use /retry.",
+        ]);
+      }
+      scheduleRender();
+    });
     sse.start();
     sseRef.current = sse;
   };
@@ -747,20 +824,7 @@ export function App({
     renderNow();
   };
 
-  // Pull the active account from the backend (it holds the session, not us).
-  // Returns the /auth/session payload, or null when the server has no account
-  // support — so callers can tell "signed out" apart from "feature absent".
-  const refreshAccount = async () => {
-    try {
-      const session = await getSession(serverUrl);
-      m.account = session.account || null;
-      return session;
-    } catch {
-      return null;
-    }
-  };
-
-  const init = async () => {
+  const init = async ({ project = m.project, resumeSessionId = null } = {}) => {
     m.conn = "connecting";
     renderNow();
     const up = await health(serverUrl).catch(() => false);
@@ -768,26 +832,40 @@ export function App({
       m.conn = "offline";
       pushNotice("error", `Cannot reach Lumeri server at ${serverUrl}`, [
         "Is the Lumeri server running on port 7788?  Check its launchd service.",
-        "Override with --server <url> or $LUMERI_SERVER.  Then /retry.",
+        "Override with --server <url> or $LUMERI_SERVER. Then /retry.",
       ]);
       renderNow();
       return;
     }
     try {
-      const s = await createSession(serverUrl);
+      const s = resumeSessionId
+        ? await resumeSession(serverUrl, resumeSessionId)
+        : await createSession(serverUrl, { projectId: project?.project_id });
       m.sessionId = s.session_id;
+      m.retainedRuntimeBytes = 0;
+      m.project = project || null;
       m.lastEventId = null;
-      m.planMode = false; // fresh sessions start with plan mode off
-      pushNotice("success", `connected · session ${m.sessionId}`);
+      m.planMode = typeof s.plan_mode === "boolean" ? s.plan_mode : false;
+      pushNotice(
+        "success",
+        m.project
+          ? `Project ${m.project.name} · session ${m.sessionId}`
+          : `connected · session ${m.sessionId}`,
+        m.project
+          ? ["shared Project memory, logs, assets, and edit state are active"]
+          : undefined,
+      );
       connectSse();
-      const session = await refreshAccount();
-      if (session && !session.account) {
-        pushNotice("info", "not signed in", ["/login to sign in — email code or Google"]);
-      }
       openPreview(); // light up the preview window alongside the terminal
     } catch (e) {
       m.conn = "offline";
-      pushNotice("error", `Failed to create session: ${e.message}`);
+      if (e?.status === 401 || e?.status === 403) {
+        pushNotice("error", "Runtime authorization denied", [
+          "Open the installed Lumeri product to grant access, then use /retry.",
+        ]);
+      } else {
+        pushNotice("error", `Failed to create session: ${e.message}`);
+      }
     }
     renderNow();
   };
@@ -843,7 +921,13 @@ export function App({
         renderNow();
         return;
       }
-      turn.banners.push({ kind: "turn_error", text: `send failed: ${e.message}` });
+      if (e?.status === 401 || e?.status === 403) {
+        m.conn = "offline";
+        turn.banners.push({ kind: "turn_error", text: "Runtime authorization denied" });
+        pushNotice("error", "Open the installed Lumeri product to grant access, then use /retry.");
+      } else {
+        turn.banners.push({ kind: "turn_error", text: `send failed: ${e.message}` });
+      }
       if (m.current === turn) {
         finalizeCurrent();
         m.busy = false;
@@ -949,59 +1033,6 @@ export function App({
     }
   };
 
-  // Switch the backend model / thinking effort. No arg lists the priority
-  // catalog with the active pick marked; an arg sets it. The selection is
-  // global + persisted (config.json) — same store the web /model uses.
-  const doModel = async (arg) => {
-    if (m.conn === "offline") {
-      pushNotice("error", "not connected — /retry to reconnect");
-      return;
-    }
-    const tokens = (arg || "").trim().split(/\s+/).filter(Boolean);
-    try {
-      // Bare /model → show the catalog.
-      if (tokens.length === 0) {
-        const info = await getModel(serverUrl);
-        const efforts = info.efforts || [];
-        const active = info.active || {};
-        const lines = (info.priority || []).map((it, i) => {
-          const on = it.id === active.model;
-          const def = i === 0 ? " · default" : "";
-          return `${on ? "●" : "○"} ${i + 1}. ${it.label}${def}  (${it.id})`;
-        });
-        lines.push(
-          `思考强度: ${active.effort}${active.is_default_effort ? " · default" : ""}  ` +
-            `[${efforts.join(" / ")}]`,
-        );
-        lines.push("切换: /model <#|id> [强度] · 例 /model 2 high · /model default 复位");
-        pushNotice("info", `当前模型: ${active.label} (${active.model})`, lines);
-        return;
-      }
-      // Determine intent: a lone effort keyword sets effort; otherwise the
-      // first token is the model and an optional second token is the effort.
-      const info = await getModel(serverUrl);
-      const efforts = info.efforts || [];
-      const body = {};
-      if (tokens.length === 1 && efforts.includes(tokens[0].toLowerCase())) {
-        body.effort = tokens[0].toLowerCase();
-      } else {
-        body.model = tokens[0];
-        if (tokens[1]) body.effort = tokens[1].toLowerCase();
-      }
-      const res = await setModel(serverUrl, body);
-      const active = res.active || {};
-      pushNotice("success", `已切换 → ${active.label}`, [
-        `模型: ${active.model}${active.is_default_model ? " · default" : ""}`,
-        `思考强度: ${active.effort}${active.is_default_effort ? " · default" : ""}`,
-        "对所有会话生效（下一个回合起）",
-      ]);
-    } catch (e) {
-      pushNotice("error", `model switch failed: ${e.message}`, [
-        "usage: /model [<#|id>] [low|medium|high|max]",
-      ]);
-    }
-  };
-
   // ── slash commands ───────────────────────────────────────────────────
   const runSlash = async (slash) => {
     const { name, arg } = slash;
@@ -1020,10 +1051,17 @@ export function App({
       case "new":
         await newSession();
         break;
+      case "project":
+        await doProject(arg);
+        break;
+      case "trust":
+        doTrust(arg);
+        break;
       case "session":
         pushNotice("info", `session ${m.sessionId || "—"}`, [
           `server: ${serverUrl}`,
           `connection: ${m.conn}`,
+          `workspace: ${m.project ? `Project ${m.project.name}` : "independent Chat"}`,
         ]);
         break;
       case "retry":
@@ -1042,24 +1080,13 @@ export function App({
       case "onboard":
       case "init":
         if (m.conn === "offline") {
-          pushNotice("error", `backend not reachable at ${serverUrl}`, setupGuidance());
+          pushNotice("error", `backend not reachable at ${serverUrl}`, setupGuidance(commandName));
         } else {
           pushNotice("info", `✓ backend ready at ${serverUrl}`, [
             `connection: ${m.conn}`,
-            "the backend owns onboarding — nothing to configure here.",
-            "not signed in? use /login",
+            "access configuration stays in the installed Lumeri product.",
           ]);
         }
-        break;
-      case "login":
-        await doLogin(arg);
-        break;
-      case "logout":
-        await doLogout();
-        break;
-      case "account":
-      case "whoami":
-        await doAccount(arg);
         break;
       case "upload":
         await doUpload(arg);
@@ -1074,7 +1101,12 @@ export function App({
         await openPreview({ force: true });
         break;
       case "timeline":
-        await doTimeline();
+        if (product === "video") await doTimeline();
+        else pushNotice("error", "unknown command: /timeline", ["/help lists Quanta commands"]);
+        break;
+      case "quanta":
+        if (product === "quanta") await doQuanta(arg);
+        else pushNotice("error", "unknown command: /quanta", ["/help lists Video commands"]);
         break;
       case "tasks":
         await doTasks(arg);
@@ -1085,14 +1117,13 @@ export function App({
       case "sandbox":
         await doSandbox(arg);
         break;
-      case "model":
-        await doModel(arg);
-        break;
       case "annotate":
-        await doAnnotate(arg);
+        if (product === "video") await doAnnotate(arg);
+        else pushNotice("error", "unknown command: /annotate", ["/help lists Quanta commands"]);
         break;
       case "annotations":
-        await doAnnotations(arg);
+        if (product === "video") await doAnnotations(arg);
+        else pushNotice("error", "unknown command: /annotations", ["/help lists Quanta commands"]);
         break;
       default:
         pushNotice("error", `unknown command: /${name}`, ["/help lists commands"]);
@@ -1113,7 +1144,11 @@ export function App({
     if (discardedCurrent) drainQueue();
   };
 
-  const newSession = async () => {
+  const newSession = async ({ project = m.project, resumeSessionId = null } = {}) => {
+    if (m.busy) {
+      pushNotice("error", "cannot switch sessions while a turn is running");
+      return false;
+    }
     if (m.sessionId) closeSession(serverUrl, m.sessionId).catch(() => {});
     if (sseRef.current) sseRef.current.stop();
     resetTurnState();
@@ -1123,7 +1158,114 @@ export function App({
     m.titleRequestSeq += 1;
     updateTerminalTitle();
     clearTranscript();
-    await init();
+    m.project = project || null;
+    await init({ project: m.project, resumeSessionId });
+    return Boolean(m.sessionId);
+  };
+
+  const doProject = async (arg) => {
+    const command = parseProjectCommand(arg);
+    const usage = [
+      "/project",
+      "/project create <name> [--folder <path>]",
+      "/project use <#|name|project_id>",
+      "/project resume <#|session_id>",
+      "/project leave",
+    ];
+    if (m.busy) return pushNotice("error", "cannot switch Project while a turn is running");
+    if (command.action === "invalid") return pushNotice("error", "unknown /project action", usage);
+
+    try {
+      if (command.action === "leave") {
+        if (!m.project) return pushNotice("info", "already in an independent Chat");
+        await newSession({ project: null });
+        return;
+      }
+
+      if (command.action === "create") {
+        if (!command.name && !command.sourceRoot) {
+          return pushNotice("error", "Project name or folder is required", usage);
+        }
+        let sourceRoot = "";
+        if (command.sourceRoot) {
+          sourceRoot = canonicalizeFolder(command.sourceRoot);
+          if (!isFolderTrusted(sourceRoot)) {
+            return pushNotice("error", "folder is not trusted", [
+              `Run /trust ${sourceRoot} and create the Project again.`,
+              "Trust is stored locally in ~/.lumeri/config.toml.",
+            ]);
+          }
+        }
+        const project = await createProject(serverUrl, {
+          name: command.name,
+          sourceRoot,
+        });
+        await newSession({ project });
+        pushNotice("success", `created Project ${project.name}`, [
+          sourceRoot ? "local source folder bound" : "using Lumeri private editing storage",
+        ]);
+        return;
+      }
+
+      const payload = await listProjects(serverUrl);
+      const projects = visibleProjects(payload);
+      if (command.action === "list") {
+        if (!projects.length) {
+          return pushNotice("info", "no Projects yet", ["/project create <name>"]);
+        }
+        const lines = projects.map((project, index) => {
+          const active = m.project?.project_id === project.project_id ? "●" : "○";
+          const sessions = Array.isArray(project.sessions) ? project.sessions.length : 0;
+          const storage = project.source_root ? "folder bound" : "Lumeri storage";
+          return `${active} ${index + 1}. ${project.name} · ${sessions} session(s) · ${storage}`;
+        });
+        if (m.project) {
+          const current = projects.find((project) => project.project_id === m.project.project_id);
+          const sessions = Array.isArray(current?.sessions) ? current.sessions : [];
+          if (sessions.length) {
+            lines.push("", `Sessions in ${m.project.name}:`);
+            sessions.forEach((session, index) => {
+              lines.push(`  ${index + 1}. ${session.title || session.session_id}`);
+            });
+            lines.push("  resume with /project resume <#|session_id>");
+          }
+        }
+        return pushNotice("info", m.project ? `current Project: ${m.project.name}` : "Projects", lines);
+      }
+
+      if (command.action === "use") {
+        const project = selectProject(projects, command.selector);
+        if (!project) return pushNotice("error", `Project not found: ${command.selector || "—"}`, usage);
+        await newSession({ project });
+        return;
+      }
+
+      if (!m.project) {
+        return pushNotice("error", "enter a Project before resuming one of its sessions", [
+          "/project use <#|name|project_id>",
+        ]);
+      }
+      const project = projects.find((item) => item.project_id === m.project.project_id);
+      const session = selectProjectSession(project, command.selector);
+      if (!session) {
+        return pushNotice("error", `Project session not found: ${command.selector || "—"}`, [
+          "/project lists the current Project's sessions",
+        ]);
+      }
+      await newSession({ project, resumeSessionId: session.session_id });
+    } catch (e) {
+      pushNotice("error", `Project command failed: ${e.message}`, usage);
+    }
+  };
+
+  const doTrust = (arg) => {
+    const folder = (arg || process.cwd()).trim();
+    try {
+      const trusted = trust(folder);
+      pushNotice("success", "folder trusted for Project access", [trusted]);
+    } catch (e) {
+      pushNotice("error", `could not trust folder: ${e.message}`);
+    }
   };
 
   const doUpload = async (path) => {
@@ -1168,8 +1310,8 @@ export function App({
     });
   };
 
-  // The canonical Video workspace in CLI-preview mode (same session,
-  // read-only). Auto-opened on launch unless disabled; reopen with /preview.
+  // Video gets its canonical session-attached workspace; Quanta uses its
+  // product page. Both remain views of the same configured local runtime.
   const openPreview = async ({ force = false } = {}) => {
     if (!m.sessionId) {
       if (force) pushNotice("error", "not connected — /retry first");
@@ -1178,15 +1320,15 @@ export function App({
     if (!force && !preview) return; // auto-open disabled via --no-preview
     let available = true;
     try {
-      available = await previewAvailable(serverUrl);
+      available = await previewAvailable(serverUrl, { product });
     } catch {
       available = false;
     }
     if (!available) {
-      if (force) pushNotice("info", "this server does not support the shared Video preview yet", [`expected CLI preview mode at ${serverUrl}/video/`]);
+      if (force) pushNotice("info", `this server does not support the shared ${product === "quanta" ? "Quanta" : "Video"} preview yet`, [`expected preview at ${serverUrl}/${product === "quanta" ? "quanta" : "video/"}`]);
       return;
     }
-    const url = previewUrl(serverUrl, m.sessionId);
+    const url = previewUrl(serverUrl, m.sessionId, { product });
     if (openExternal(url, "preview")) {
       pushNotice("success", "preview window opened", [url]);
     } else if (force) {
@@ -1248,6 +1390,18 @@ export function App({
       pushNotice("info", `timeline (${(tl.tracks || []).length} track(s))`, lines);
     } catch (e) {
       pushNotice("error", `could not load timeline: ${e.message}`);
+    }
+  };
+
+  const doQuanta = async (arg) => {
+    if (arg) return pushNotice("error", "usage: /quanta");
+    if (!m.sessionId) return pushNotice("error", "not connected — /retry first");
+    try {
+      const { formatQuanta } = await import("./quanta.js");
+      const view = formatQuanta(await getQuanta(serverUrl, m.sessionId));
+      pushNotice("info", view.title, view.lines);
+    } catch (e) {
+      pushNotice("error", `could not load Quanta state tree: ${e.message}`);
     }
   };
 
@@ -1328,266 +1482,6 @@ export function App({
     }
   };
 
-  // ── accounts / auth ──────────────────────────────────────────────────
-  // Stop any in-flight login poll (a newer /login or a /logout supersedes it).
-  const cancelLoginPoll = () => {
-    m.loginSeq++;
-    if (m.loginPoll) {
-      clearTimeout(m.loginPoll);
-      m.loginPoll = null;
-    }
-  };
-
-  // /login          → open the web login dialog (?login=1)
-  // /login email    → interactive email-code sign-in in the TUI
-  // /login <email>  → email-code sign-in for that address
-  // /login google   → browser Google sign-in
-  const doLogin = async (arg) => {
-    const a = (arg || "").trim();
-    if (a.toLowerCase() === "google") return doGoogleLogin();
-    if (a.toLowerCase() === "email") {
-      m.pendingLogin = { step: "email" };
-      pushNotice("info", "sign in with an email code", [
-        "type your email address and press enter",
-        "or /login google to use Google · /cancel to abort",
-      ]);
-      renderNow();
-      return;
-    }
-    if (a.includes("@")) return beginEmailLogin(a);
-
-    const url = new URL("/v3/", serverUrl);
-    url.searchParams.set("login", "1");
-    const prevId = m.account?.account_id || null;
-    const headless = browserOpenDisabled();
-    pushNotice("info", headless ? "open the login page in your browser" : "opening login page in your browser…", [
-      url.toString(),
-      "sign in there, then come back — this view updates automatically",
-    ]);
-    renderNow();
-    if (!headless) openExternal(url.toString(), "Login page");
-
-    cancelLoginPoll();
-    const token = m.loginSeq;
-    const deadline = Date.now() + 5 * 60 * 1000;
-    const poll = async () => {
-      if (token !== m.loginSeq) return;
-      let acct = null;
-      try {
-        acct = (await getSession(serverUrl)).account || null;
-      } catch {}
-      if (token !== m.loginSeq) return;
-      if (acct && acct.account_id && acct.account_id !== prevId) {
-        m.account = acct;
-        m.loginPoll = null;
-        pushNotice("success", `signed in as ${accountLabel(acct)}`);
-        renderNow();
-        return;
-      }
-      if (Date.now() > deadline) {
-        m.loginPoll = null;
-        pushNotice("info", "still waiting on the browser sign-in", [
-          "finish in the browser, then run /account to check",
-        ]);
-        renderNow();
-        return;
-      }
-      m.loginPoll = setTimeout(poll, 1500);
-    };
-    m.loginPoll = setTimeout(poll, 1500);
-  };
-
-  // Mail a code to `email` and switch the prompt into code-entry mode.
-  const beginEmailLogin = async (email) => {
-    m.pendingLogin = { step: "sending", email };
-    renderNow();
-    try {
-      await startEmailLogin(serverUrl, email);
-      m.pendingLogin = { step: "code", email };
-      pushNotice("info", `code sent to ${email}`, [
-        "enter the 6-digit code · blank line to resend · /cancel to abort",
-      ]);
-    } catch (e) {
-      m.pendingLogin = { step: "email" };
-      pushNotice("error", `couldn't send a code: ${e.message}`, ["type a different email, or /cancel"]);
-    }
-    renderNow();
-  };
-
-  // A plain line typed while m.pendingLogin is set: first the email, then the code.
-  const handleLoginInput = async (raw) => {
-    const pl = m.pendingLogin;
-    if (!pl) return;
-    const val = (raw || "").trim();
-    if (pl.step === "email") {
-      if (val) await beginEmailLogin(val);
-      return;
-    }
-    if (pl.step === "code") {
-      if (!val) {
-        try {
-          await startEmailLogin(serverUrl, pl.email);
-          pushNotice("info", "code resent");
-        } catch (e) {
-          pushNotice("error", `couldn't resend: ${e.message}`);
-        }
-        renderNow();
-        return;
-      }
-      try {
-        const r = await verifyEmailLogin(serverUrl, pl.email, val.replace(/\D/g, ""));
-        m.account = r.account || (await refreshAccount())?.account || null;
-        m.pendingLogin = null;
-        pushNotice("success", `signed in as ${accountLabel(m.account)}`);
-      } catch (e) {
-        pushNotice("error", e.message, ["enter the code again, or /cancel to abort"]);
-      }
-      renderNow();
-    }
-  };
-
-  // Abandon an in-progress email sign-in (/cancel).
-  const cancelLogin = () => {
-    if (!m.pendingLogin) return false;
-    m.pendingLogin = null;
-    pushNotice("info", "sign-in cancelled — back to normal input");
-    renderNow();
-    return true;
-  };
-
-  const doGoogleLogin = async () => {
-    let start;
-    try {
-      start = await startGoogleLogin(serverUrl);
-    } catch (e) {
-      if (e.status === 400) {
-        return pushNotice("error", "Google sign-in isn't configured on the server", [
-          "set google_oauth_client_id in ~/.gemia/config.json",
-          "(or the GEMIA_GOOGLE_OAUTH_CLIENT_ID env var), then restart the sidecar",
-        ]);
-      }
-      return pushNotice("error", `could not start sign-in: ${e.message}`);
-    }
-    const url = start.authorization_url;
-    if (!url) return pushNotice("error", "server did not return a sign-in URL");
-    const prevId = m.account?.account_id || null;
-    const headless = browserOpenDisabled();
-    pushNotice("info", headless ? "open this URL to sign in with Google" : "opening your browser to sign in with Google…", [
-      url,
-      "approve there, then come back — this view updates automatically",
-    ]);
-    renderNow();
-    if (!headless) openExternal(url, "Google sign-in");
-
-    // The backend handles the loopback callback and flips active.json; we just
-    // poll /auth/session until the active account changes (or we give up).
-    cancelLoginPoll();
-    const token = m.loginSeq;
-    const deadline = Date.now() + 3 * 60 * 1000;
-    const poll = async () => {
-      if (token !== m.loginSeq) return; // superseded
-      let acct = null;
-      try {
-        acct = (await getSession(serverUrl)).account || null;
-      } catch {
-        /* transient while waiting on the browser; keep polling */
-      }
-      if (token !== m.loginSeq) return;
-      if (acct && acct.account_id && acct.account_id !== prevId) {
-        m.account = acct;
-        m.loginPoll = null;
-        pushNotice("success", `signed in as ${accountLabel(acct)}`);
-        renderNow();
-        return;
-      }
-      if (Date.now() > deadline) {
-        m.loginPoll = null;
-        pushNotice("info", "still waiting on the browser sign-in", [
-          "finish in the browser, then run /account to check",
-        ]);
-        renderNow();
-        return;
-      }
-      m.loginPoll = setTimeout(poll, 1500);
-      m.loginPoll.unref?.();
-    };
-    m.loginPoll = setTimeout(poll, 1500);
-    m.loginPoll.unref?.();
-  };
-
-  const doLogout = async () => {
-    cancelLoginPoll();
-    try {
-      await logout(serverUrl);
-      m.account = null;
-      pushNotice("success", "signed out");
-    } catch (e) {
-      pushNotice("error", `sign-out failed: ${e.message}`);
-    }
-    renderNow();
-  };
-
-  const doAccount = async (arg) => {
-    const parts = (arg || "").trim().split(/\s+/).filter(Boolean);
-    const sub = (parts[0] || "").toLowerCase();
-
-    if (sub === "switch") {
-      const target = parts[1];
-      if (!target) return pushNotice("error", "usage: /account switch <#|id>");
-      // The roster comes from /auth/session (always present) rather than the
-      // standalone /accounts route, which older backends don't expose.
-      let accounts;
-      try {
-        accounts = (await getSession(serverUrl)).accounts || [];
-      } catch (e) {
-        return pushNotice("error", `could not list accounts: ${e.message}`);
-      }
-      let chosen = null;
-      if (/^\d+$/.test(target)) chosen = accounts[Number(target) - 1];
-      else
-        chosen =
-          accounts.find((a) => a.account_id === target) ||
-          accounts.find((a) => a.account_id?.startsWith(target)) ||
-          accounts.find((a) => a.email === target);
-      if (!chosen) {
-        return pushNotice("error", `no such account: ${target}`, ["/account lists what's available"]);
-      }
-      try {
-        const acct = await switchAccount(serverUrl, chosen.account_id);
-        m.account = acct;
-        pushNotice("success", `switched to ${accountLabel(acct)}`);
-      } catch (e) {
-        pushNotice("error", `switch failed: ${e.message}`);
-      }
-      renderNow();
-      return;
-    }
-
-    // No sub-command → show current account + the roster.
-    const session = await refreshAccount();
-    if (!session) {
-      return pushNotice("error", "accounts unavailable", ["this server build may not support accounts"]);
-    }
-    const accounts = session.accounts || [];
-    const curId = session.account?.account_id || null;
-    const lines = [
-      session.account
-        ? `signed in as ${accountLabel(session.account)}`
-        : "not signed in — /login (email code or Google)",
-    ];
-    if (accounts.length) {
-      lines.push("");
-      accounts.forEach((a, i) => {
-        const mark = a.account_id === curId ? "●" : "○";
-        lines.push(`${mark} ${i + 1}. ${accountLabel(a)}  (${a.account_id})`);
-      });
-      lines.push("");
-      lines.push("switch with  /account switch <#|id>");
-    }
-    pushNotice("info", "accounts", lines);
-    renderNow();
-  };
-
   // ── ask (elicit) answering ─────────────────────────────────────────────
   // Deliver the user's answer to the pending ask_question back to the session
   // loop, then clear answer mode so normal turn input resumes. Failing to
@@ -1628,17 +1522,11 @@ export function App({
       // /cancel drops a pending ask; everything else runs as usual even mid-ask
       // so the user is never locked out of commands like /help or /quit.
       if (slash.name === "cancel") {
-        if (!cancelLogin() && !cancelAsk()) pushNotice("info", "nothing to cancel");
+        if (!cancelAsk()) pushNotice("info", "nothing to cancel");
         renderNow();
         return;
       }
       runSlash(slash);
-      return;
-    }
-    // While signing in by email, a plain line is the address, then the code.
-    if (m.pendingLogin) {
-      m.history.push(raw);
-      handleLoginInput(raw);
       return;
     }
     // In answer mode, a plain line is the answer to the pending question.
@@ -1706,7 +1594,6 @@ export function App({
       clearInterval(animate);
       if (m.throttleTimer) clearTimeout(m.throttleTimer);
       if (m.ctrlCTimer) clearTimeout(m.ctrlCTimer);
-      if (m.loginPoll) clearTimeout(m.loginPoll);
       if (m.turnErrorGrace) clearTimeout(m.turnErrorGrace);
       m.titleRequestSeq += 1;
       if (sseRef.current) sseRef.current.stop();
@@ -1722,6 +1609,7 @@ export function App({
   // personalized set replaces the defaults, so nothing flickers when there is no
   // durable memory or the CLI is signed out.
   useEffect(() => {
+    if (product === "quanta") return undefined;
     let cancelled = false;
     let timer = null;
     const poll = async (attempt = 0) => {
@@ -1752,8 +1640,8 @@ export function App({
   // ── render ───────────────────────────────────────────────────────────
   const renderLogItem = (item) => {
     if (item.type === "banner")
-      return html`<${Banner} key=${item.id} version=${version} serverUrl=${serverUrl} />`;
-    if (item.type === "notice") return html`<${Notice} key=${item.id} notice=${item} />`;
+      return html`<${Banner} key=${item.id} version=${version} serverUrl=${serverUrl} product=${product} />`;
+    if (item.type === "notice") return html`<${Notice} key=${item.id} notice=${item} product=${product} />`;
     if (item.type === "turn")
       return html`<${Box} key=${item.id} flexDirection="column" marginBottom=${1}>
         <${Turn} turn=${item.turn} tick=${0} />
@@ -1774,7 +1662,6 @@ export function App({
     !m.log.some((it) => it.type === "turn") &&
     !m.busy &&
     !m.pendingAsk &&
-    !m.pendingLogin &&
     Array.isArray(m.starterSuggestions) &&
     m.starterSuggestions.length === 4;
 
@@ -1795,7 +1682,9 @@ export function App({
     <${InputBox}
       onSubmit=${onSubmit}
       history=${m.history}
-      answerMode=${!!m.pendingAsk || !!m.pendingLogin}
+      commands=${commandCatalog}
+      answerMode=${!!m.pendingAsk}
+      placeholder=${product === "quanta" ? "Describe a Quanta task — / for commands" : undefined}
       starters=${showStarters ? m.starterSuggestions : null}
     />
     <${StatusLine}
@@ -1807,7 +1696,7 @@ export function App({
       conn=${m.conn}
       queued=${m.queued.length}
       ctrlCArmed=${m.ctrlCArmed}
-      account=${m.account}
+      projectName=${m.project?.name || ""}
       planMode=${m.planMode}
       tasks=${[...m.backgroundTasks.values()].filter((t) => t.status === "running" || t.status === "submitted" || t.status === "queued").length}
     />

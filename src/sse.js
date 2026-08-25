@@ -7,20 +7,65 @@
 import { EventEmitter } from "node:events";
 import { openStream } from "./http.js";
 
+export const DEFAULT_MAX_SSE_BUFFER_BYTES = 1024 * 1024;
+export const DEFAULT_MAX_SSE_EVENT_BYTES = 512 * 1024;
+
+const LF_BOUNDARY = Buffer.from("\n\n");
+const CRLF_BOUNDARY = Buffer.from("\r\n\r\n");
+
+function byteLimit(value, name) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    const error = new RangeError(`${name} must be a positive safe integer`);
+    error.code = "E_SSE_LIMIT_CONFIG";
+    throw error;
+  }
+  return value;
+}
+
+function nextBoundary(buffer, start = 0) {
+  const lf = buffer.indexOf(LF_BOUNDARY, start);
+  const crlf = buffer.indexOf(CRLF_BOUNDARY, start);
+  if (lf === -1 && crlf === -1) return null;
+  if (crlf !== -1 && (lf === -1 || crlf < lf)) return { index: crlf, bytes: 4 };
+  return { index: lf, bytes: 2 };
+}
+
+function partialBoundaryBytes(buffer) {
+  let matched = 0;
+  for (const boundary of [LF_BOUNDARY, CRLF_BOUNDARY]) {
+    for (let length = 1; length < boundary.length && length <= buffer.length; length += 1) {
+      if (buffer.subarray(buffer.length - length).equals(boundary.subarray(0, length))) {
+        matched = Math.max(matched, length);
+      }
+    }
+  }
+  return matched;
+}
+
 export class SseClient extends EventEmitter {
-  constructor(baseUrl, sessionId, { lastEventId = null } = {}) {
+  constructor(baseUrl, sessionId, {
+    lastEventId = null,
+    connectTimeoutMs = 10_000,
+    maxBufferBytes = DEFAULT_MAX_SSE_BUFFER_BYTES,
+    maxEventBytes = DEFAULT_MAX_SSE_EVENT_BYTES,
+  } = {}) {
     super();
     this.baseUrl = baseUrl;
     this.sessionId = sessionId;
     this.lastEventId = lastEventId;
+    this.connectTimeoutMs = connectTimeoutMs;
+    this.maxBufferBytes = byteLimit(maxBufferBytes, "maxBufferBytes");
+    this.maxEventBytes = byteLimit(maxEventBytes, "maxEventBytes");
     this.stopped = false;
+    this.fatalError = null;
     this.req = null;
     this.res = null;
     this.reconnectTimer = null;
-    this.buf = "";
+    this.buf = Buffer.alloc(0);
   }
 
   start() {
+    if (this.fatalError) return this;
     this.stopped = false;
     this._connect();
     return this;
@@ -39,8 +84,16 @@ export class SseClient extends EventEmitter {
         /* ignore */
       }
     }
+    if (this.res) {
+      try {
+        this.res.destroy();
+      } catch {
+        /* ignore */
+      }
+    }
     this.req = null;
     this.res = null;
+    this.buf = Buffer.alloc(0);
   }
 
   async _connect() {
@@ -51,49 +104,137 @@ export class SseClient extends EventEmitter {
     try {
       const { res, req } = await openStream(
         this.baseUrl,
-        `/sessions/${this.sessionId}/stream`,
-        { headers },
+        `/sessions/${encodeURIComponent(String(this.sessionId))}/stream`,
+        {
+          headers,
+          onRequest: (req) => {
+            this.req = req;
+            if (this.stopped) req.destroy();
+          },
+          timeoutMs: this.connectTimeoutMs,
+        },
       );
       if (this.stopped) {
         req.destroy();
         return;
       }
       if (res.statusCode !== 200) {
+        const status = res.statusCode || 0;
         res.resume();
-        this.emit("error", new Error(`stream HTTP ${res.statusCode}`));
+        const denied = status === 401 || status === 403;
+        const error = new Error(denied ? "Runtime authorization denied" : `stream HTTP ${status}`);
+        error.status = status;
+        error.code = denied ? "E_RUNTIME_ACCESS" : "E_STREAM_HTTP";
+        if (denied) {
+          this.stopped = true;
+          this.req = null;
+          this.res = null;
+          this.emit("state", "offline");
+          this.emit("error", error);
+          return;
+        }
+        this.emit("error", error);
         return this._scheduleReconnect();
       }
       this.req = req;
       this.res = res;
-      this.buf = "";
-      res.setEncoding("utf8");
+      this.buf = Buffer.alloc(0);
       this.emit("state", "live");
       res.on("data", (chunk) => this._onData(chunk));
       res.on("end", () => this._scheduleReconnect());
       res.on("close", () => this._scheduleReconnect());
       res.on("error", () => this._scheduleReconnect());
     } catch (err) {
+      if (this.stopped) return;
       this.emit("error", err);
       this._scheduleReconnect();
     }
   }
 
   _onData(chunk) {
-    this.buf += chunk;
-    // Event boundary is a blank line. Tolerate \r\n.
-    let idx;
-    while ((idx = this.buf.indexOf("\n\n")) !== -1 || (idx = this.buf.indexOf("\r\n\r\n")) !== -1) {
-      const sep = this.buf.slice(idx, idx + 4) === "\r\n\r\n" ? 4 : 2;
-      const block = this.buf.slice(0, idx);
-      this.buf = this.buf.slice(idx + sep);
-      this._emitBlock(block);
+    if (this.stopped || this.fatalError) return;
+    const incoming = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), "utf8");
+    let offset = 0;
+    while (offset < incoming.length && !this.stopped) {
+      const available = this.maxBufferBytes - this.buf.length;
+      if (available <= 0) {
+        this._failAtLimit(
+          "E_SSE_BUFFER_LIMIT",
+          "session stream buffer",
+          this.maxBufferBytes,
+          this.buf.length + incoming.length - offset,
+        );
+        return;
+      }
+      const take = Math.min(available, incoming.length - offset);
+      const slice = incoming.subarray(offset, offset + take);
+      this.buf = this.buf.length === 0
+        ? Buffer.from(slice)
+        : Buffer.concat([this.buf, slice], this.buf.length + slice.length);
+      offset += take;
+      if (!this._drainBlocks()) return;
+
+      const pendingEventBytes = this.buf.length - partialBoundaryBytes(this.buf);
+      if (pendingEventBytes > this.maxEventBytes) {
+        this._failAtLimit(
+          "E_SSE_EVENT_LIMIT",
+          "session stream event",
+          this.maxEventBytes,
+          pendingEventBytes,
+        );
+        return;
+      }
+      if (offset < incoming.length && this.buf.length >= this.maxBufferBytes) {
+        this._failAtLimit(
+          "E_SSE_BUFFER_LIMIT",
+          "session stream buffer",
+          this.maxBufferBytes,
+          this.buf.length + incoming.length - offset,
+        );
+        return;
+      }
     }
   }
 
+  _drainBlocks() {
+    let cursor = 0;
+    let boundary;
+    while ((boundary = nextBoundary(this.buf, cursor))) {
+      const block = this.buf.subarray(cursor, boundary.index);
+      if (block.length > this.maxEventBytes) {
+        this._failAtLimit(
+          "E_SSE_EVENT_LIMIT",
+          "session stream event",
+          this.maxEventBytes,
+          block.length,
+        );
+        return false;
+      }
+      this._emitBlock(block);
+      if (this.stopped) return false;
+      cursor = boundary.index + boundary.bytes;
+    }
+    if (cursor > 0) this.buf = Buffer.from(this.buf.subarray(cursor));
+    return true;
+  }
+
+  _failAtLimit(code, label, limit, received) {
+    if (this.fatalError) return;
+    const error = new Error(`${label} exceeded the ${limit}-byte limit`);
+    error.code = code;
+    error.limit = limit;
+    error.received = received;
+    this.fatalError = error;
+    this.stop();
+    this.emit("state", "offline");
+    this.emit("error", error);
+  }
+
   _emitBlock(block) {
+    const text = Buffer.isBuffer(block) ? block.toString("utf8") : String(block);
     let id = null;
     const dataLines = [];
-    for (const rawLine of block.split(/\r?\n/)) {
+    for (const rawLine of text.split(/\r?\n/)) {
       if (rawLine.startsWith(":")) continue; // comment / heartbeat
       const colon = rawLine.indexOf(":");
       if (colon === -1) continue;
@@ -103,20 +244,25 @@ export class SseClient extends EventEmitter {
       if (field === "id") id = value;
       else if (field === "data") dataLines.push(value);
     }
-    if (id != null) this.lastEventId = id;
-    if (dataLines.length === 0) return;
+    if (dataLines.length === 0) {
+      if (id != null) this.lastEventId = id;
+      return;
+    }
     let event;
     try {
       event = JSON.parse(dataLines.join("\n"));
     } catch (err) {
-      this.emit("parse_error", err, dataLines.join("\n"));
+      // A malformed event was not consumed. Keep the cursor behind it so a
+      // reconnect cannot silently skip data the client never understood.
+      this.emit("parse_error", err, dataLines.join("\n"), id);
       return;
     }
+    if (id != null) this.lastEventId = id;
     this.emit("event", event, id);
   }
 
   _scheduleReconnect() {
-    if (this.stopped || this.reconnectTimer) return;
+    if (this.stopped || this.fatalError || this.reconnectTimer) return;
     this.req = null;
     this.res = null;
     this.emit("state", "reconnecting");

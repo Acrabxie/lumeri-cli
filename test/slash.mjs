@@ -1,8 +1,8 @@
-// Unit tests for the slash-command autocomplete: a bare "/" must offer every
-// visible command (the menu used to hard-cap at 6, hiding /login, /logout…),
-// and menuScroll must keep the selected row inside the visible window.
+// Unit tests for the public-safe slash-command autocomplete: a bare "/" must
+// offer every visible Runtime command, and menuScroll must keep the selected
+// row inside the visible window.
 // Run: node test/slash.mjs
-import { COMMANDS, autocompleteState, menuScroll, parseSlash } from "../src/slash.js";
+import { COMMANDS, autocompleteState, commandsForProduct, menuScroll, parseSlash } from "../src/slash.js";
 
 const fail = [];
 const ok = (cond, msg) => {
@@ -21,19 +21,22 @@ const ok = (cond, msg) => {
     names.length === visibleCount,
     `bare "/" should match all ${visibleCount} visible commands (got ${names.length})`,
   );
-  for (const must of ["login", "logout", "account", "session", "retry", "quit"]) {
+  for (const must of ["project", "tasks", "plan", "sandbox", "session", "retry", "quit"]) {
     ok(names.includes(must), `bare "/" matches should include "${must}"`);
+  }
+  for (const removed of ["login", "logout", "account", "whoami", "model"]) {
+    ok(!names.includes(removed), `public catalog must not include "${removed}"`);
   }
   ok(!names.includes("exit"), 'hidden commands must not appear (got "exit")');
 }
 
-// Prefix narrowing still works.
+// Prefix narrowing still works for public commands.
 {
-  const st = autocompleteState("/log");
+  const st = autocompleteState("/pro");
   const names = st ? st.matches.map((c) => c.name) : [];
   ok(
-    names.length === 2 && names.includes("login") && names.includes("logout"),
-    `"/log" should match exactly login+logout (got ${JSON.stringify(names)})`,
+    names.length === 1 && names[0] === "project",
+    `"/pro" should match exactly project (got ${JSON.stringify(names)})`,
   );
 }
 
@@ -41,6 +44,22 @@ const ok = (cond, msg) => {
 ok(autocompleteState("hello") === null, "plain text must not autocomplete");
 ok(autocompleteState("/open ab") === null, "a line with a space must not autocomplete");
 ok(autocompleteState("/zzz") === null, "an unknown fragment must not autocomplete");
+
+// Product catalogs are behavior, not branding: Quanta gets its state-tree
+// command and must not inherit Video timeline/annotation commands.
+{
+  const video = commandsForProduct("video").map((c) => c.name);
+  const quanta = commandsForProduct("quanta").map((c) => c.name);
+  ok(video.includes("timeline") && video.includes("annotate"), "Video catalog keeps timeline tools");
+  ok(!video.includes("quanta"), "Video catalog must not expose /quanta");
+  ok(quanta.includes("quanta"), "Quanta catalog exposes /quanta");
+  for (const name of ["timeline", "annotate", "annotations"]) {
+    ok(!quanta.includes(name), `Quanta catalog must not expose Video-only /${name}`);
+  }
+  const st = autocompleteState("/", commandsForProduct("quanta"));
+  const names = st ? st.matches.map((c) => c.name) : [];
+  ok(names.includes("quanta") && !names.includes("timeline"), "Quanta autocomplete uses its own catalog");
+}
 
 // --- menuScroll ---------------------------------------------------------------
 
@@ -72,10 +91,8 @@ ok(menuScroll(7, 6, 9, 6) === 1, "stale window start must clamp to total-max");
 // --- parseSlash ---------------------------------------------------------------
 
 {
-  const p = parseSlash("/login");
-  ok(p && p.name === "login" && p.arg === "", "parseSlash /login");
-  const q = parseSlash("/open  as_001 ");
-  ok(q && q.name === "open" && q.arg === "as_001", "parseSlash trims the arg");
+  const p = parseSlash("/open  as_001 ");
+  ok(p && p.name === "open" && p.arg === "as_001", "parseSlash trims the arg");
   ok(parseSlash("hi /there") === null, "parseSlash rejects non-slash lines");
 }
 

@@ -1,9 +1,11 @@
 // Compact terminal-tab identity for the interactive CLI. OSC 0 is supported
 // by the macOS terminals that surface process titles in their session list.
-// Keep the same star mark as the in-terminal Lumeri banner so the tiny title
-// still reads as the product logo rather than an arbitrary abbreviation.
+// A terminal cannot render the SVG logo, so retain only its distinctive round
+// dot as the compact, monochrome mark. Keep it aligned with the in-terminal
+// banner rather than falling back to a generic sparkle.
 
-export const LUMERI_TERMINAL_MARK = "✦ Lumeri";
+export const LUMERI_TERMINAL_ICON = "●";
+export const LUMERI_TERMINAL_MARK = `${LUMERI_TERMINAL_ICON} Lumeri`;
 export const MAX_TERMINAL_SUMMARY_CHARS = 40;
 
 export function compactTerminalSummary(value, maxChars = MAX_TERMINAL_SUMMARY_CHARS) {

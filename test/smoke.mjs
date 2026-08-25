@@ -116,7 +116,7 @@ await sleep(1600);
 const all = frames.join("\n");
 const fail = [];
 const must = [
-  ["banner wordmark", "✦ Lumeri"],
+  ["banner wordmark", "● Lumeri Video"],
   ["connected notice", "connected · session v3-t"],
   ["user echo", "grade it warm"],
   // c1 carries activity_text → the header shows the model's plain-language line
@@ -138,10 +138,10 @@ for (const [label, needle] of must) {
 if (autoTitleBody?.messages?.[0]?.content !== "grade it warm") {
   fail.push("terminal title: auto_title did not receive the first user input");
 }
-if (!terminalTitles.includes("✦ Lumeri | grade it warm")) {
+if (!terminalTitles.includes("● Lumeri | grade it warm")) {
   fail.push("terminal title: immediate first-input label missing");
 }
-if (!terminalTitles.includes("✦ Lumeri | 暖色调剪辑")) {
+if (!terminalTitles.includes("● Lumeri | 暖色调剪辑")) {
   fail.push("terminal title: generated summary label missing");
 }
 

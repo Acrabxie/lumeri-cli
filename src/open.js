@@ -5,8 +5,8 @@
 // surface the URL in their own output, so a suppressed open still leaves the
 // user a copy-paste path.
 //
-// Launch is argv exec (execFile) — no shell ever parses the URL, so there is
-// no command-injection surface.
+// Launch is argv exec (execFile) — no shell ever parses the URL. Windows uses
+// Explorer directly instead of cmd.exe's `start` built-in.
 import { execFile } from "node:child_process";
 
 export function browserOpenDisabled() {
@@ -19,13 +19,32 @@ export function browserOpenDisabled() {
   return !process.stdout.isTTY;
 }
 
+function httpUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(String(url));
+  } catch {
+    throw new TypeError("browser URL must be an absolute HTTP(S) URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new TypeError("browser URL must use HTTP or HTTPS");
+  }
+  return parsed.toString();
+}
+
 // Returns true when a launch was attempted, false when auto-open is off
-// (nothing spawned). onError fires only on an actual launch failure.
-export function openInBrowser(url, onError) {
+// (nothing spawned). onError fires only on an actual launch failure. Platform
+// and launcher injection keep Windows behavior testable without starting a
+// real process on the host running the test suite.
+export function openInBrowser(
+  url,
+  onError,
+  { platform = process.platform, launcher = execFile } = {},
+) {
+  const target = httpUrl(url);
   if (browserOpenDisabled()) return false;
-  const bin = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-  execFile(bin, args, (err) => {
+  const bin = platform === "darwin" ? "open" : platform === "win32" ? "explorer.exe" : "xdg-open";
+  launcher(bin, [target], (err) => {
     if (err) onError?.(err);
   });
   return true;

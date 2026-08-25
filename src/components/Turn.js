@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import { html } from "../html.js";
 import { color, glyph } from "../theme.js";
 import { renderMarkdown } from "../markdown.js";
+import { terminalSafeText } from "../terminal-output.js";
 import { ToolCall } from "./ToolCall.js";
 
 // Prose wraps at ≤88 cells — full-width lines are hard to track back on wide
@@ -24,9 +25,9 @@ function Banner({ banner, topGap }) {
       ${tone
         ? html`<${Text} color=${tone.c}>${tone.mark + " "}</${Text}>`
         : html`<${Text} dimColor>${glyph.bullet + " "}</${Text}>`}
-      <${Text} dimColor=${!tone}>${banner.text}</${Text}>
+      <${Text} dimColor=${!tone}>${terminalSafeText(banner.text)}</${Text}>
     </${Box}>
-    ${banner.sub ? html`<${Text} dimColor>${"  " + banner.sub}</${Text}>` : null}
+    ${banner.sub ? html`<${Text} dimColor>${"  " + terminalSafeText(banner.sub)}</${Text}>` : null}
   </${Box}>`;
 }
 
@@ -37,7 +38,7 @@ export function Turn({ turn }) {
     children.push(
       html`<${Box} key="user" marginBottom=${1}>
         <${Text} dimColor>${glyph.user + " "}</${Text}>
-        <${Text}>${turn.userText}</${Text}>
+        <${Text}>${terminalSafeText(turn.userText)}</${Text}>
       </${Box}>`,
     );
   }

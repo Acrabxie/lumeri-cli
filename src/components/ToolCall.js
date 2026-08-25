@@ -2,9 +2,10 @@ import { Box, Text } from "ink";
 import { html } from "../html.js";
 import { color, glyph, assetChip } from "../theme.js";
 import { formatArgs, truncate, toolLabel } from "../format.js";
+import { terminalSafeText } from "../terminal-output.js";
 
 function AssetChip({ assetId, kind }) {
-  return html`<${Text} dimColor>${assetChip(assetId, kind)}</${Text}>`;
+  return html`<${Text} dimColor>${terminalSafeText(assetChip(assetId, kind))}</${Text}>`;
 }
 
 function ProgressBar({ percent }) {
@@ -49,9 +50,9 @@ function Subagents({ call }) {
     lines.push(
       html`<${Box} key="head">
         <${Text} dimColor>${"  ├─ "}</${Text}>
-        <${Text} bold>${child.agent_id}</${Text}>
-        <${Text} dimColor>${" [" + (child.profile || "?") + "] "}</${Text}>
-        <${Text} color=${statusColor} dimColor=${!statusColor}>${child.status}</${Text}>
+        <${Text} bold>${terminalSafeText(child.agent_id)}</${Text}>
+        <${Text} dimColor>${" [" + terminalSafeText(child.profile || "?") + "] "}</${Text}>
+        <${Text} color=${statusColor} dimColor=${!statusColor}>${terminalSafeText(child.status)}</${Text}>
         ${meta.length ? html`<${Text} dimColor>${"  " + meta.join(" · ")}</${Text}>` : null}
       </${Box}>`,
     );
@@ -59,15 +60,15 @@ function Subagents({ call }) {
     order.slice(0, CHILD_LINES_MAX).forEach((k, ci) => {
       const c = child.calls.get(k);
       if (!c) return;
-      const detail = c.status === "done"
-        ? truncate(c.summary || "done", 120)
+      const detail = terminalSafeText(c.status === "done"
+        ? c.summary || "done"
         : c.status === "failed"
-          ? truncate(c.error || "failed", 120)
-          : c.progress?.message || c.status;
+          ? c.error || "failed"
+          : c.progress?.message || c.status);
       lines.push(
         html`<${Box} key=${"c" + ci}>
           <${Text} dimColor>${"  │   " + glyph.branch + " "}</${Text}>
-          <${Text}>${toolLabel(c.tool_name)}</${Text}>
+          <${Text}>${terminalSafeText(toolLabel(c.tool_name))}</${Text}>
           <${Text} dimColor>${" — " + truncate(detail, 120)}</${Text}>
         </${Box}>`,
       );
@@ -79,12 +80,12 @@ function Subagents({ call }) {
     }
     if (child.summary) {
       lines.push(
-        html`<${Box} key="sum"><${Text} dimColor>${"  │     " + truncate(child.summary, 200)}</${Text}></${Box}>`,
+        html`<${Box} key="sum"><${Text} dimColor>${"  │     " + truncate(terminalSafeText(child.summary), 200)}</${Text}></${Box}>`,
       );
     }
     if (Array.isArray(child.assetIds) && child.assetIds.length) {
       lines.push(
-        html`<${Box} key="assets"><${Text} dimColor>${"  │     assets: " + child.assetIds.join(", ")}</${Text}></${Box}>`,
+        html`<${Box} key="assets"><${Text} dimColor>${"  │     assets: " + child.assetIds.map(terminalSafeText).join(", ")}</${Text}></${Box}>`,
       );
     }
     return html`<${Box} key=${"g" + gi} flexDirection="column">${lines}</${Box}>`;
@@ -94,14 +95,14 @@ function Subagents({ call }) {
 
 export function ToolCall({ call }) {
   const bulletColor = STATUS_COLOR[call.status];
-  const argStr = formatArgs(call.args);
+  const argStr = terminalSafeText(formatArgs(call.args));
 
   const lines = [];
 
   if (call.status === "running" || call.status === "pending") {
     // No per-line spinner — the status line owns the app's single animation;
     // the accent bullet on the header already marks this card as live.
-    const msg = call.progress?.message || (call.status === "pending" ? "starting…" : "working…");
+    const msg = terminalSafeText(call.progress?.message || (call.status === "pending" ? "starting…" : "working…"));
     lines.push(
       html`<${Box} key="run">
         <${Text} dimColor>${"  " + glyph.branch + "  "}</${Text}>
@@ -115,7 +116,7 @@ export function ToolCall({ call }) {
     lines.push(
       html`<${Box} key="done">
         <${Text} dimColor>${"  " + glyph.branch + "  "}</${Text}>
-        <${Text}>${truncate(call.summary || "done", 240)}</${Text}>
+        <${Text}>${truncate(terminalSafeText(call.summary || "done"), 240)}</${Text}>
         ${call.previewAssetId
           ? html`<${Text}> <${AssetChip} assetId=${call.previewAssetId} kind=${call.previewKind} /></${Text}>`
           : null}
@@ -126,7 +127,7 @@ export function ToolCall({ call }) {
       html`<${Box} key="gated">
         <${Text} dimColor>${"  " + glyph.branch + "  "}</${Text}>
         <${Text} bold color=${color.warn}>waiting</${Text}>
-        <${Text} dimColor>${" — budget gate: " + truncate(call.summary || "blocked", 200)}</${Text}>
+        <${Text} dimColor>${" — budget gate: " + truncate(terminalSafeText(call.summary || "blocked"), 200)}</${Text}>
       </${Box}>`,
     );
   } else if (call.status === "failed") {
@@ -136,27 +137,27 @@ export function ToolCall({ call }) {
       html`<${Box} key="err">
         <${Text} dimColor>${"  " + glyph.branch + "  "}</${Text}>
         <${Text} color=${color.error}>${glyph.cross + " "}</${Text}>
-        <${Text}>${truncate(call.error || "failed", 240)}</${Text}>
+        <${Text}>${truncate(terminalSafeText(call.error || "failed"), 240)}</${Text}>
       </${Box}>`,
     );
     if (call.errorCode) {
       lines.push(
-        html`<${Box} key="code"><${Text} dimColor>${"     " + call.errorCode}</${Text}></${Box}>`,
+        html`<${Box} key="code"><${Text} dimColor>${"     " + terminalSafeText(call.errorCode)}</${Text}></${Box}>`,
       );
     }
     if (Array.isArray(call.validOptions) && call.validOptions.length) {
       lines.push(
-        html`<${Box} key="valid"><${Text} dimColor>${"     valid: " + call.validOptions.join(", ")}</${Text}></${Box}>`,
+        html`<${Box} key="valid"><${Text} dimColor>${"     valid: " + call.validOptions.map(terminalSafeText).join(", ")}</${Text}></${Box}>`,
       );
     }
     if (call.recovery) {
       lines.push(
-        html`<${Box} key="rec"><${Text} dimColor>${"     recovery: " + String(call.recovery)}</${Text}></${Box}>`,
+        html`<${Box} key="rec"><${Text} dimColor>${"     recovery: " + terminalSafeText(call.recovery)}</${Text}></${Box}>`,
       );
     }
     if (call.hint) {
       lines.push(
-        html`<${Box} key="hint"><${Text} dimColor>${"     hint: " + truncate(call.hint, 200)}</${Text}></${Box}>`,
+        html`<${Box} key="hint"><${Text} dimColor>${"     hint: " + truncate(terminalSafeText(call.hint), 200)}</${Text}></${Box}>`,
       );
     }
   }
@@ -164,7 +165,7 @@ export function ToolCall({ call }) {
   return html`<${Box} flexDirection="column" marginTop=${0}>
     <${Box}>
       <${Text} color=${bulletColor} dimColor=${!bulletColor}>${glyph.tool + " "}</${Text}>
-      <${Text} bold>${call.activityText ? truncate(call.activityText, 160) : toolLabel(call.tool_name)}</${Text}>
+      <${Text} bold>${call.activityText ? truncate(terminalSafeText(call.activityText), 160) : terminalSafeText(toolLabel(call.tool_name))}</${Text}>
       ${!call.activityText && argStr ? html`<${Text} dimColor>${"(" + argStr + ")"}</${Text}>` : null}
     </${Box}>
     ${lines}

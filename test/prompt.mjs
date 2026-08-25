@@ -1,11 +1,11 @@
-// Regression coverage for `lumeri -p`: it must run one complete v3 Agent turn
+// Regression coverage for `luvi -p`: it must run one complete v3 Agent turn
 // through the sidecar, work without a TTY, and never route through `codex chat`.
 import assert from "node:assert";
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const bin = fileURLToPath(new URL("../bin/lumeri.js", import.meta.url));
+const bin = fileURLToPath(new URL("../bin/luvi.js", import.meta.url));
 let stream = null;
 let eventId = 0;
 let promptBody = null;
@@ -90,12 +90,15 @@ assert.ok(
 const help = await run(["--help"]);
 assert.equal(help.code, 0);
 assert.ok(help.stdout.includes("-p, --prompt <text>"));
+assert.ok(help.stdout.includes("--json"));
+assert.ok(help.stdout.includes("--output-schema <file>"));
 assert.ok(!help.stdout.includes("logout|chat"));
 
+const beforeRemoved = requestOrder.length;
 const removed = await run(["codex", "chat", "hello"]);
 assert.equal(removed.code, 2);
-assert.ok(removed.stderr.includes("unknown subcommand: chat"));
-assert.ok(!removed.stderr.includes("One-shot prompt"));
+assert.ok(removed.stderr.includes("unknown argument: codex"));
+assert.equal(requestOrder.length, beforeRemoved, "removed credential command must fail before HTTP");
 
 await new Promise((resolve) => server.close(resolve));
-console.log("prompt.mjs: lumeri -p uses the full sidecar Agent path; codex chat is removed");
+console.log("prompt.mjs: luvi -p uses the full sidecar Agent path; codex chat is removed");

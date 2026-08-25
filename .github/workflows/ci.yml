@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22.23.2
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+
+      - name: Pin npm 11.17.0
+        run: npm install --global npm@11.17.0
+
+      - name: Verify toolchain
+        run: |
+          test "$(node --version)" = "v22.23.2"
+          test "$(npm --version)" = "11.17.0"
+
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Test public source boundary and Runtime clients
+        run: npm test
+
+      - name: Test terminal IME input handling
+        run: npm run test:ime
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=low
+
+      - name: Reproduce split packages and verify compatibility payload
+        run: npm run verify:packages:exact-split -- --out-dir "$RUNNER_TEMP/lumeri-pack"
+
+  reproduce-compatibility-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 26.5.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26.5.0
+          cache: npm
+
+      - name: Pin npm 11.17.0
+        run: npm install --global npm@11.17.0
+
+      - name: Verify toolchain
+        run: |
+          test "$(node --version)" = "v26.5.0"
+          test "$(npm --version)" = "11.17.0"
+
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Reproduce the frozen compatibility package exactly
+        run: npm run pack:compat -- --out-dir "$RUNNER_TEMP/lumeri-compat-pack"

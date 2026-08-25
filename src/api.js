@@ -1,10 +1,14 @@
 // Typed wrappers over the Lumeri v3 HTTP surface (see gemia/v3_routes.py).
-//   POST   /sessions                       -> create
+//   POST   /sessions                       -> create (optionally inside a Project)
 //   GET    /sessions/{id}                  -> info (assets, latest_event_id)
+//   POST   /sessions/{id}/resume           -> resume a durable Project session
+//   GET    /projects                       -> named Projects + sessions
+//   POST   /projects                       -> create a named Project
 //   POST   /sessions/{id}/turn             -> submit user message (202; 409 if busy)
 //   POST   /sessions/{id}/assets           -> upload (raw body + X-Filename)
 //   GET    /sessions/{id}/assets           -> list
 //   GET    /sessions/{id}/timeline         -> project timeline
+//   GET    /sessions/{id}/quanta           -> discrete state tree
 //   POST   /sessions/{id}/close            -> close
 
 import fs from "node:fs";
@@ -20,9 +24,30 @@ export class ApiError extends Error {
   }
 }
 
+// Runtime session identifiers are persisted as directory names and routed as
+// one HTTP path segment. Keep the CLI on the same narrow protocol accepted by
+// the Runtime's session store instead of accepting arbitrary URL/shell text.
+const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+function sessionSegment(sessionId) {
+  if (typeof sessionId !== "string" || !SESSION_ID_RE.test(sessionId)) {
+    throw new ApiError("invalid Runtime session id", 0, "E_INVALID_SESSION_ID");
+  }
+  return encodeURIComponent(sessionId);
+}
+
+function sessionResponse(res, ...accept) {
+  const body = ok(res, ...accept);
+  sessionSegment(body?.session_id);
+  return body;
+}
+
 function ok(res, ...accept) {
   const wanted = accept.length ? accept : [200, 201, 202];
   if (!wanted.includes(res.status)) {
+    if (res.status === 401 || res.status === 403) {
+      throw new ApiError("Runtime authorization denied", res.status, "E_RUNTIME_ACCESS");
+    }
     const msg = res.json?.error || res.text || `HTTP ${res.status}`;
     throw new ApiError(msg, res.status, res.json?.code);
   }
@@ -34,18 +59,46 @@ export async function health(baseUrl) {
   return res.status === 200;
 }
 
-export async function createSession(baseUrl) {
-  const res = await request(baseUrl, "/sessions", { method: "POST", timeoutMs: 8000 });
+export async function createSession(baseUrl, { projectId } = {}) {
+  const options = { method: "POST", timeoutMs: 8000 };
+  if (projectId) options.json = { project_id: projectId };
+  const res = await request(baseUrl, "/sessions", options);
+  return sessionResponse(res, 201);
+}
+
+export async function resumeSession(baseUrl, sessionId) {
+  const segment = sessionSegment(sessionId);
+  const res = await request(baseUrl, `/sessions/${segment}/resume`, {
+    method: "POST",
+    json: {},
+    timeoutMs: 8000,
+  });
+  return sessionResponse(res, 200);
+}
+
+export async function listProjects(baseUrl) {
+  const res = await request(baseUrl, "/projects");
+  return ok(res, 200);
+}
+
+export async function createProject(baseUrl, { name = "", sourceRoot = "" } = {}) {
+  const json = { name: String(name || "").trim() };
+  if (String(sourceRoot || "").trim()) json.source_root = String(sourceRoot).trim();
+  const res = await request(baseUrl, "/projects", {
+    method: "POST",
+    json,
+    timeoutMs: 8000,
+  });
   return ok(res, 201);
 }
 
 export async function getInfo(baseUrl, sessionId) {
-  const res = await request(baseUrl, `/sessions/${sessionId}`);
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}`);
   return ok(res, 200);
 }
 
 export async function submitTurn(baseUrl, sessionId, message) {
-  const res = await request(baseUrl, `/sessions/${sessionId}/turn`, {
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}/turn`, {
     method: "POST",
     json: { message },
   });
@@ -60,8 +113,9 @@ export async function submitTurn(baseUrl, sessionId, message) {
 // session history. This is best-effort UI metadata: an older host or a title
 // generation failure must never block the actual Agent turn.
 export async function generateSessionTitle(baseUrl, sessionId, messages) {
+  const segment = sessionSegment(sessionId);
   try {
-    const res = await request(baseUrl, `/sessions/${encodeURIComponent(sessionId)}/auto_title`, {
+    const res = await request(baseUrl, `/sessions/${segment}/auto_title`, {
       method: "POST",
       json: { messages },
       timeoutMs: 25000,
@@ -72,25 +126,6 @@ export async function generateSessionTitle(baseUrl, sessionId, messages) {
   } catch {
     return null;
   }
-}
-
-// Fetch the backend model catalog (priority-ordered) + active selection.
-//   GET /model -> { slot, priority:[{id,label,provider}], efforts:[…], active }
-// Mirrors the web client's /model command (static/v3/v3.js).
-export async function getModel(baseUrl) {
-  const res = await request(baseUrl, "/model");
-  return ok(res, 200);
-}
-
-// Switch the active model and/or thinking effort. Send only the keys you want
-// to change; a value of null/"" resets that dimension to the backend default.
-//   POST /model { model?, effort? } -> { ok, slot, priority, efforts, active }
-export async function setModel(baseUrl, { model, effort } = {}) {
-  const json = {};
-  if (model !== undefined) json.model = model;
-  if (effort !== undefined) json.effort = effort;
-  const res = await request(baseUrl, "/model", { method: "POST", json });
-  return ok(res, 200);
 }
 
 // Memory-aware starter suggestions for the empty composer (gemia
@@ -112,7 +147,7 @@ export async function getStarterRecommendations(baseUrl) {
 }
 
 export async function listAssets(baseUrl, sessionId) {
-  const res = await request(baseUrl, `/sessions/${sessionId}/assets`);
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}/assets`);
   return ok(res, 200).assets || [];
 }
 
@@ -140,6 +175,22 @@ export async function listMediaAnnotations(baseUrl, assetId) {
   return ok(res, 200).annotations || [];
 }
 
+export async function startRoughcutPreparation(baseUrl, body) {
+  const res = await request(baseUrl, "/media-library/prepare", {
+    method: "POST",
+    json: { ...body, background: true },
+    timeoutMs: 30000,
+  });
+  return ok(res, 202);
+}
+
+export async function getRoughcutJob(baseUrl, jobId) {
+  const res = await request(baseUrl, `/media-library/prepare/${encodeURIComponent(jobId)}`, {
+    timeoutMs: 10000,
+  });
+  return ok(res, 200);
+}
+
 // Deliver the user's answer to a pending `ask_question` (elicit) back to the
 // session loop. Mirrors the web client (static/v3/v3.js showAskModal submit):
 //   POST /sessions/{id}/ask_response  { question_id, answers }
@@ -147,7 +198,7 @@ export async function listMediaAnnotations(baseUrl, assetId) {
 // server (gemia/v3_routes.py _ask_response) requires both and 404s an unknown
 // question_id. Accept 200/202/204 — the route returns 200 on success.
 export async function submitAskResponse(baseUrl, sessionId, questionId, answers) {
-  const res = await request(baseUrl, `/sessions/${sessionId}/ask_response`, {
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}/ask_response`, {
     method: "POST",
     json: { question_id: questionId, answers },
   });
@@ -157,7 +208,7 @@ export async function submitAskResponse(baseUrl, sessionId, questionId, answers)
 // Toggle the session's plan mode (gemia/v3_routes.py _set_plan_mode). The
 // backend also broadcasts a `plan_mode_changed` SSE event to every client.
 export async function setPlanMode(baseUrl, sessionId, enabled) {
-  const res = await request(baseUrl, `/sessions/${sessionId}/plan_mode`, {
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}/plan_mode`, {
     method: "POST",
     json: { enabled: !!enabled },
   });
@@ -183,7 +234,12 @@ export async function setSandbox(baseUrl, disabled) {
 }
 
 export async function getTimeline(baseUrl, sessionId) {
-  const res = await request(baseUrl, `/sessions/${sessionId}/timeline`);
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}/timeline`);
+  return ok(res, 200);
+}
+
+export async function getQuanta(baseUrl, sessionId) {
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}/quanta`);
   return ok(res, 200);
 }
 
@@ -191,19 +247,23 @@ export async function getTimeline(baseUrl, sessionId) {
 // returns the authoritative snapshot the SSE ring can't (used by /tasks and
 // resyncAfterGap); killTask maps to POST .../tasks/{job_id}/kill.
 export async function listTasks(baseUrl, sessionId) {
-  const res = await request(baseUrl, `/sessions/${sessionId}/tasks`);
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}/tasks`);
   return ok(res, 200);
 }
 
 export async function killTask(baseUrl, sessionId, jobId) {
-  const res = await request(baseUrl, `/sessions/${sessionId}/tasks/${encodeURIComponent(jobId)}/kill`, {
-    method: "POST",
-  });
+  const res = await request(
+    baseUrl,
+    `/sessions/${sessionSegment(sessionId)}/tasks/${encodeURIComponent(jobId)}/kill`,
+    {
+      method: "POST",
+    },
+  );
   return ok(res, 200);
 }
 
 export async function closeSession(baseUrl, sessionId) {
-  const res = await request(baseUrl, `/sessions/${sessionId}/close`, {
+  const res = await request(baseUrl, `/sessions/${sessionSegment(sessionId)}/close`, {
     method: "POST",
     timeoutMs: 5000,
   });
@@ -215,6 +275,7 @@ export async function closeSession(baseUrl, sessionId) {
 const UPLOAD_CAP = 500 * 1024 * 1024;
 
 export async function uploadAsset(baseUrl, sessionId, filePath) {
+  const segment = sessionSegment(sessionId);
   const abs = path.resolve(filePath.replace(/^~(?=\/|$)/, process.env.HOME || "~"));
   const stat = await fs.promises.stat(abs); // throws ENOENT with a clear message
   if (!stat.isFile()) throw new ApiError(`not a file: ${abs}`, 0, "E_NOT_FILE");
@@ -223,7 +284,7 @@ export async function uploadAsset(baseUrl, sessionId, filePath) {
     throw new ApiError(`file too large: ${stat.size} > ${UPLOAD_CAP} bytes`, 0, "E_TOO_LARGE");
   }
   // Stream from disk instead of buffering the whole file in memory.
-  const res = await request(baseUrl, `/sessions/${sessionId}/assets`, {
+  const res = await request(baseUrl, `/sessions/${segment}/assets`, {
     method: "POST",
     stream: fs.createReadStream(abs),
     contentLength: stat.size,
@@ -237,22 +298,30 @@ export async function uploadAsset(baseUrl, sessionId, filePath) {
 }
 
 export function assetUrl(baseUrl, sessionId, assetId) {
-  return new URL(`/sessions/${sessionId}/assets/${assetId}`, baseUrl).toString();
+  const session = sessionSegment(sessionId);
+  const asset = encodeURIComponent(String(assetId));
+  return new URL(`/sessions/${session}/assets/${asset}`, baseUrl).toString();
 }
 
 // The preview is the canonical Lumeri Video workspace, attached read-only to
 // the session owned by the terminal. `mode=cli-preview` removes only the chat
 // surfaces; the preview, timeline, modules, styling, and interactions stay
 // identical to the 7788 Video UI.
-export function previewUrl(baseUrl, sessionId) {
+export function previewUrl(baseUrl, sessionId, { product = "video" } = {}) {
+  sessionSegment(sessionId);
+  if (product === "quanta") return new URL("/quanta", baseUrl).toString();
   const u = new URL("/video/", baseUrl);
   u.searchParams.set("mode", "cli-preview");
   u.searchParams.set("session", sessionId);
   return u.toString();
 }
 
-export async function previewAvailable(baseUrl) {
+export async function previewAvailable(baseUrl, { product = "video" } = {}) {
   try {
+    if (product === "quanta") {
+      const res = await request(baseUrl, "/quanta", { timeoutMs: 3000 });
+      return res.status === 200;
+    }
     const res = await request(baseUrl, "/video/v3.js", { timeoutMs: 3000 });
     return res.status === 200 && res.text.includes('pageParams.get("mode") === "cli-preview"');
   } catch {

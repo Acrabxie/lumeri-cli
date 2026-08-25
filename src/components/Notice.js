@@ -1,7 +1,8 @@
 import { Box, Text } from "ink";
 import { html } from "../html.js";
 import { color, glyph } from "../theme.js";
-import { COMMANDS } from "../slash.js";
+import { commandsForProduct } from "../slash.js";
+import { terminalSafeText } from "../terminal-output.js";
 
 const TONE = {
   info: null, // dim glyph, no hue
@@ -22,8 +23,8 @@ const SHORTCUTS = [
 
 // Unboxed help — bold headings and a two-column layout whose command column is
 // sized to the longest entry, so nothing wraps mid-name.
-function HelpNotice() {
-  const cmds = COMMANDS.filter((c) => !c.hidden).map((c) => ({
+function HelpNotice({ product }) {
+  const cmds = commandsForProduct(product).filter((c) => !c.hidden).map((c) => ({
     label: "/" + c.name + (c.arg ? " " + c.arg : ""),
     desc: c.desc,
   }));
@@ -31,8 +32,8 @@ function HelpNotice() {
   return html`<${Box} flexDirection="column" marginBottom=${1}>
     <${Text} bold>Commands</${Text}>
     <${Box}>
-      <${Text} dimColor>${"  " + glyph.user + " /upload clip.mp4"}</${Text}>
-      <${Text} dimColor>${"   e.g. add a file, then just describe the edit"}</${Text}>
+      <${Text} dimColor>${product === "quanta" ? "  " + glyph.user + " /quanta" : "  " + glyph.user + " /upload clip.mp4"}</${Text}>
+      <${Text} dimColor>${product === "quanta" ? "   inspect the discrete state tree and branches" : "   e.g. add a file, then just describe the edit"}</${Text}>
     </${Box}>
     ${cmds.map(
       (c) => html`<${Box} key=${c.label} paddingLeft=${2}>
@@ -50,8 +51,8 @@ function HelpNotice() {
   </${Box}>`;
 }
 
-export function Notice({ notice }) {
-  if (notice.tone === "help") return html`<${HelpNotice} />`;
+export function Notice({ notice, product = "video" }) {
+  if (notice.tone === "help") return html`<${HelpNotice} product=${product} />`;
   const c = TONE[notice.tone];
   const mark =
     notice.tone === "error"
@@ -61,8 +62,8 @@ export function Notice({ notice }) {
         : glyph.bullet;
   return html`<${Box} flexDirection="column" marginBottom=${1}>
     ${notice.title
-      ? html`<${Box}><${Text} color=${c} dimColor=${!c}>${mark + " "}</${Text}><${Text} bold>${notice.title}</${Text}></${Box}>`
+      ? html`<${Box}><${Text} color=${c} dimColor=${!c}>${mark + " "}</${Text}><${Text} bold>${terminalSafeText(notice.title)}</${Text}></${Box}>`
       : null}
-    ${(notice.lines || []).map((ln, idx) => html`<${Text} key=${idx} dimColor>${"  " + ln}</${Text}>`)}
+    ${(notice.lines || []).map((ln, idx) => html`<${Text} key=${idx} dimColor>${"  " + terminalSafeText(ln)}</${Text}>`)}
   </${Box}>`;
 }

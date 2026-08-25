@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { html } from "../html.js";
 import { color } from "../theme.js";
+import { terminalSafeText } from "../terminal-output.js";
 
 // The four built-in defaults mirror gemia/starter_recommendations.py
 // DEFAULT_SUGGESTIONS, so the empty composer is useful immediately — even
@@ -26,7 +27,7 @@ export function StarterSuggestions({ items }) {
     ${items.map(
       (it, i) => html`<${Box} key=${i}>
         <${Text} color=${color.accentText}>${"  " + (i + 1) + "  "}</${Text}>
-        <${Text}>${it.label}</${Text}>
+        <${Text}>${terminalSafeText(it.label)}</${Text}>
       </${Box}>`,
     )}
   </${Box}>`;

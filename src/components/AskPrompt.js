@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import { html } from "../html.js";
 import { color } from "../theme.js";
+import { terminalSafeText } from "../terminal-output.js";
 
 // Renders a pending ask_question (elicit) above the input box: the title,
 // optional description, and every control's choices/hints — so the user knows
@@ -22,8 +23,8 @@ export function AskPrompt({ ask }) {
       ${(ask.lines || []).map(
         (ln, idx) =>
           idx === 0
-            ? html`<${Text} key=${idx} bold>${ln}</${Text}>`
-            : html`<${Text} key=${idx} dimColor>${"  " + ln}</${Text}>`,
+            ? html`<${Text} key=${idx} bold>${terminalSafeText(ln)}</${Text}>`
+            : html`<${Text} key=${idx} dimColor>${"  " + terminalSafeText(ln)}</${Text}>`,
       )}
     </${Box}>
     <${Text} dimColor>${"  type your answer below · /cancel to dismiss"}</${Text}>

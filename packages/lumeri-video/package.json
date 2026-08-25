@@ -1,0 +1,70 @@
+{
+  "name": "lumeri-video",
+  "version": "1.0.1",
+  "description": "Lumeri Video terminal client for the Lumeri v3 runtime",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "lumeri",
+    "video",
+    "video-editing",
+    "cli",
+    "terminal"
+  ],
+  "bin": {
+    "luvi": "bin/luvi.js"
+  },
+  "files": [
+    "bin/cli.js",
+    "bin/luvi.js",
+    "src/App.js",
+    "src/api.js",
+    "src/ask.js",
+    "src/components/AskPrompt.js",
+    "src/components/Banner.js",
+    "src/components/InputBox.js",
+    "src/components/Notice.js",
+    "src/components/Splash.js",
+    "src/components/StarterSuggestions.js",
+    "src/components/StatusLine.js",
+    "src/components/ToolCall.js",
+    "src/components/Turn.js",
+    "src/contract.js",
+    "src/contract.json",
+    "src/format.js",
+    "src/html.js",
+    "src/http.js",
+    "src/logo.js",
+    "src/markdown.js",
+    "src/open.js",
+    "src/output-schema.js",
+    "src/product.js",
+    "src/projects.js",
+    "src/prompt-cli.js",
+    "src/roughcut-cli.js",
+    "src/runtime-config.js",
+    "src/setup-cli.js",
+    "src/slash.js",
+    "src/spinner.js",
+    "src/sse.js",
+    "src/terminal-output.js",
+    "src/terminal-title.js",
+    "src/theme.js",
+    "src/trusted-folders.js"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "htm": "^3.1.1",
+    "ink": "^7.1.0",
+    "react": "^19.2.7",
+    "string-width": "^8.2.0"
+  }
+}

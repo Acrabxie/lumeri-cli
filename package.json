@@ -1,28 +1,34 @@
 {
-  "name": "lumeri-cli",
-  "version": "1.0.0",
+  "name": "lumeri-cli-source",
+  "version": "1.0.1",
   "private": true,
-  "description": "Lumeri CLI — a Claude Code–style terminal UI for the Lumeri v3 video-editing agent",
+  "description": "Public source workspace for the Lumeri Video and Lumeri Quanta Runtime clients",
   "type": "module",
-  "bin": {
-    "lumeri": "bin/lumeri.js"
-  },
+  "license": "MIT",
+  "packageManager": "npm@11.17.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "node bin/lumeri.js",
-    "mock": "node scripts/mock-server.mjs",
-    "deploy-preview": "node scripts/install-preview.mjs",
-    "test": "node test/smoke.mjs && node test/terminal-title.mjs && node test/starter.mjs && node test/recovery.mjs && node test/preview-mode.mjs && node test/preview.mjs && node test/prompt.mjs && node test/codex.mjs && node test/providers.mjs && node test/auth.mjs && node test/login-tui.mjs && node test/ask.mjs && node test/format-labels.mjs && node test/slash.mjs && node test/model.mjs && node test/openai-bridge.mjs && node test/plan.mjs && node test/tasks.mjs && node test/contract.mjs && node test/setup.mjs && node test/spinner.mjs"
+    "start:video": "node bin/luvi.js",
+    "start:quanta": "node bin/luqu.js",
+    "test:ime": "node test/input-ime.mjs",
+    "test": "node test/public-boundary.mjs && node test/smoke.mjs && node test/terminal-title.mjs && node test/terminal-output.mjs && node test/open-security.mjs && node test/resource-limits.mjs && node test/starter.mjs && node test/recovery.mjs && node test/preview-mode.mjs && node test/prompt.mjs && node test/headless-output.mjs && node test/roughcut.mjs && node test/ask.mjs && node test/format-labels.mjs && node test/slash.mjs && node test/quanta.mjs && node test/luqu-file.mjs && node test/projects.mjs && node test/plan.mjs && node test/tasks.mjs && node test/contract.mjs && node test/setup.mjs && node test/spinner.mjs && node test/runtime-config.mjs && node test/trusted-folders.mjs && node test/product-entrypoints.mjs && node test/public-runtime.mjs && node test/packages.mjs",
+    "pack:video": "node scripts/pack-package.mjs lumeri-video --verify --require-exact",
+    "pack:quanta": "node scripts/pack-package.mjs lumeri-quanta --verify --require-exact",
+    "pack:compat": "node scripts/pack-package.mjs lumeri-cli --verify --require-exact",
+    "verify:packages": "node scripts/verify-packages.mjs",
+    "verify:packages:exact-split": "node scripts/verify-packages.mjs --require-exact-split"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "htm": "^3.1.1",
     "ink": "^7.1.0",
-    "react": "^19.2.7"
+    "react": "^19.2.7",
+    "string-width": "^8.2.0"
   },
   "devDependencies": {
-    "ink-testing-library": "^4.0.0",
-    "jsdom": "^29.1.1"
+    "ink-testing-library": "^4.0.0"
   }
 }

@@ -1,0 +1,83 @@
+{
+  "name": "lumeri-cli",
+  "version": "1.0.0",
+  "description": "Lumeri Video and Lumeri Quanta terminal clients for the Lumeri v3 runtime",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "lumeri",
+    "cli",
+    "video",
+    "video-editing",
+    "terminal"
+  ],
+  "bin": {
+    "luvi": "bin/luvi.js",
+    "luqu": "bin/luqu.js"
+  },
+  "files": [
+    "bin/cli.js",
+    "bin/luqu.js",
+    "bin/luvi.js",
+    "src/App.js",
+    "src/api.js",
+    "src/ask.js",
+    "src/components/AskPrompt.js",
+    "src/components/Banner.js",
+    "src/components/InputBox.js",
+    "src/components/Notice.js",
+    "src/components/Splash.js",
+    "src/components/StarterSuggestions.js",
+    "src/components/StatusLine.js",
+    "src/components/ToolCall.js",
+    "src/components/Turn.js",
+    "src/contract.js",
+    "src/contract.json",
+    "src/format.js",
+    "src/html.js",
+    "src/http.js",
+    "src/logo.js",
+    "src/luqu-file.js",
+    "src/markdown.js",
+    "src/open.js",
+    "src/output-schema.js",
+    "src/product.js",
+    "src/projects.js",
+    "src/prompt-cli.js",
+    "src/quanta.js",
+    "src/roughcut-cli.js",
+    "src/runtime-config.js",
+    "src/setup-cli.js",
+    "src/slash.js",
+    "src/spinner.js",
+    "src/sse.js",
+    "src/terminal-title.js",
+    "src/theme.js",
+    "src/trusted-folders.js"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node bin/luvi.js",
+    "start:quanta": "node bin/luqu.js",
+    "test:ime": "node test/input-ime.mjs",
+    "test": "node test/smoke.mjs && node test/terminal-title.mjs && node test/starter.mjs && node test/recovery.mjs && node test/preview-mode.mjs && node test/preview.mjs && node test/prompt.mjs && node test/headless-output.mjs && node test/roughcut.mjs && node test/ask.mjs && node test/format-labels.mjs && node test/slash.mjs && node test/quanta.mjs && node test/luqu-file.mjs && node test/projects.mjs && node test/plan.mjs && node test/tasks.mjs && node test/contract.mjs && node test/setup.mjs && node test/spinner.mjs && node test/runtime-config.mjs && node test/trusted-folders.mjs && node test/product-entrypoints.mjs && node test/public-runtime.mjs && node test/public-package.mjs"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "htm": "^3.1.1",
+    "ink": "^7.1.0",
+    "react": "^19.2.7",
+    "string-width": "^8.2.0"
+  },
+  "devDependencies": {
+    "ink-testing-library": "^4.0.0",
+    "jsdom": "^29.1.1"
+  }
+}

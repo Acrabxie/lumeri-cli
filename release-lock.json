@@ -1,0 +1,767 @@
+{
+  "schemaVersion": 1,
+  "packages": {
+    "lumeri-video": {
+      "frozenFrom": "npm:lumeri-video@1.0.1",
+      "artifact": {
+        "filename": "lumeri-video-1.0.1.tgz",
+        "sha256": "079531e9ad927c5187ffa29631f5e4db7f50392c456b96dd13c6e257adea79fa",
+        "entryCount": 39
+      },
+      "exactToolchain": {
+        "node": "22.23.2",
+        "npm": "11.17.0"
+      },
+      "entries": [
+        {
+          "name": "package/LICENSE",
+          "mode": "0644",
+          "size": 1065,
+          "sha256": "b064508a467c6f95408d108ff3425f15c5644facdeebe6fce645b1ad68dab12b"
+        },
+        {
+          "name": "package/src/api.js",
+          "mode": "0644",
+          "size": 12407,
+          "sha256": "a9cf4ba86a1af459b33e33071f6d757396cd0003d0538708d56d1d908c39db85"
+        },
+        {
+          "name": "package/src/App.js",
+          "mode": "0644",
+          "size": 66113,
+          "sha256": "b3b4fdaa93e07d94131c0f7bf25ba3f9a74c8c854723a57bfac8622ef4a40faa"
+        },
+        {
+          "name": "package/src/ask.js",
+          "mode": "0644",
+          "size": 6382,
+          "sha256": "978ce2132be76040a06ad65af6eada74da127acddec6fa63964cbf68ca0afdd6"
+        },
+        {
+          "name": "package/src/components/AskPrompt.js",
+          "mode": "0644",
+          "size": 1372,
+          "sha256": "c784e5b87ac13d1dd1f0ade22143e4db32a73da07f5b72adf3e864eede749ba5"
+        },
+        {
+          "name": "package/src/components/Banner.js",
+          "mode": "0644",
+          "size": 1024,
+          "sha256": "2fbf8d83ca94ecfb0a53f9d051cebfb4b4a2d1ab3bf2bd65c098face5d004458"
+        },
+        {
+          "name": "package/bin/cli.js",
+          "mode": "0755",
+          "size": 7578,
+          "sha256": "554b0d8505ebad76178664462e0aa9ca9621b787a736ffbc38944da3bf2c8bd4"
+        },
+        {
+          "name": "package/src/contract.js",
+          "mode": "0644",
+          "size": 744,
+          "sha256": "96f08cbbb885a2a0a412700bbc2290827fe2749d7e52b2ce67f1d777ee535610"
+        },
+        {
+          "name": "package/src/format.js",
+          "mode": "0644",
+          "size": 8444,
+          "sha256": "61b60b7489845b7b49c6d511ea2a9a5ae6322224c4ff8b62bfbf5a6b39d920cd"
+        },
+        {
+          "name": "package/src/html.js",
+          "mode": "0644",
+          "size": 270,
+          "sha256": "7ce2ea918aca7eb8728804d3e710a13e55b9763f91255d266a2caccffd485364"
+        },
+        {
+          "name": "package/src/http.js",
+          "mode": "0644",
+          "size": 5471,
+          "sha256": "fc2d8171b5ff498fb6afeb520e52a47dc2c0d96cfcb0d639a3a4302ecab4575b"
+        },
+        {
+          "name": "package/src/components/InputBox.js",
+          "mode": "0644",
+          "size": 11492,
+          "sha256": "d9709d9be0b58bb0b62d0b9b43341390eaf3c737d816814a5f9f20badafe8381"
+        },
+        {
+          "name": "package/src/logo.js",
+          "mode": "0644",
+          "size": 1022,
+          "sha256": "b536a53a0587db4f98bfb35bb03070b12203789f1d18be3735c736fddc52a0cd"
+        },
+        {
+          "name": "package/bin/luvi.js",
+          "mode": "0755",
+          "size": 84,
+          "sha256": "2a57bfab523b0d16fa461c67a3991b75329f0165ef3d1fa1d385f34c7c631d20"
+        },
+        {
+          "name": "package/src/markdown.js",
+          "mode": "0644",
+          "size": 5408,
+          "sha256": "20a4be473fb75ec0065a01645c4cf43724da6dabc747d9cc1c9b30eb6d343261"
+        },
+        {
+          "name": "package/src/components/Notice.js",
+          "mode": "0644",
+          "size": 2672,
+          "sha256": "06bca1e38d97d6140eb0bd1947efb2fe117b16a8efd3328d2d94db19ef4d6113"
+        },
+        {
+          "name": "package/src/open.js",
+          "mode": "0644",
+          "size": 2038,
+          "sha256": "85da6f6f57cda66e197d02b0fea9873efa0487e9aec30c099446f722c9042d2f"
+        },
+        {
+          "name": "package/src/output-schema.js",
+          "mode": "0644",
+          "size": 2604,
+          "sha256": "5a86ed20761fe18b5b20d9c7843ee9713d4836fce235a462283f2d8e03d5e0ef"
+        },
+        {
+          "name": "package/src/product.js",
+          "mode": "0644",
+          "size": 590,
+          "sha256": "288f11dc962fa5f8dd43d3c2f611d49aef784bd06d5d95019443c3a45fcf5fe3"
+        },
+        {
+          "name": "package/src/projects.js",
+          "mode": "0644",
+          "size": 2585,
+          "sha256": "871519d243051a2604c9ba7e67a24a1cda7a874e0fb93338fb2dc90d40607649"
+        },
+        {
+          "name": "package/src/prompt-cli.js",
+          "mode": "0644",
+          "size": 9255,
+          "sha256": "a5c8408787cae5f13c68e2c9164ac01654e65dbe0485f6e9f290e1488cbb68bb"
+        },
+        {
+          "name": "package/src/roughcut-cli.js",
+          "mode": "0644",
+          "size": 4646,
+          "sha256": "e879e039e8f06a3be972101ba536f5304a425295d2ace9e1be3703e7fcd23a5e"
+        },
+        {
+          "name": "package/src/runtime-config.js",
+          "mode": "0644",
+          "size": 1159,
+          "sha256": "797418354757acba72c6853cf055217db42ef79de36fb32f5657503ff8e43dd8"
+        },
+        {
+          "name": "package/src/setup-cli.js",
+          "mode": "0644",
+          "size": 2424,
+          "sha256": "b8f9758402e2f3d99fbb8b16c3e12be918580a218a0f321498584473b9fb3471"
+        },
+        {
+          "name": "package/src/slash.js",
+          "mode": "0644",
+          "size": 4178,
+          "sha256": "b9195b85ac5bf982e6ff5bc882b54af8926c56bb326b843ebff421f9b24ebe33"
+        },
+        {
+          "name": "package/src/spinner.js",
+          "mode": "0644",
+          "size": 528,
+          "sha256": "6421dd75f18650b3047016dfd4fcd4b9e6ecb9edae8f47f9f02d782e884364c3"
+        },
+        {
+          "name": "package/src/components/Splash.js",
+          "mode": "0644",
+          "size": 2350,
+          "sha256": "223d8b70dc77b620973e9f39d8fcb296b920b592efcc5d0ab4165e04351a560c"
+        },
+        {
+          "name": "package/src/sse.js",
+          "mode": "0644",
+          "size": 8401,
+          "sha256": "5fa17e82bb6f3793bca1ba9361af2b975f540d4e6ef5c629b48d824c0dfa3b87"
+        },
+        {
+          "name": "package/src/components/StarterSuggestions.js",
+          "mode": "0644",
+          "size": 1851,
+          "sha256": "c6e87142f7749caf9ee927a7af1d15d810f7e143a7d119ee5b827dd878b0bf97"
+        },
+        {
+          "name": "package/src/components/StatusLine.js",
+          "mode": "0644",
+          "size": 2112,
+          "sha256": "1353fc5bc56347434e92217a06fb686a4ec54a75dc2b4950e1677ba39b3290b2"
+        },
+        {
+          "name": "package/src/terminal-output.js",
+          "mode": "0644",
+          "size": 701,
+          "sha256": "7300de2a8341c83ef35703acfcb0128c4533749745483a62d72b5b247d5139ff"
+        },
+        {
+          "name": "package/src/terminal-title.js",
+          "mode": "0644",
+          "size": 1583,
+          "sha256": "90232582e1c356d2980ff6672fadacbcdca542efc06a8cd9c4ac66bbff0ed414"
+        },
+        {
+          "name": "package/src/theme.js",
+          "mode": "0644",
+          "size": 3076,
+          "sha256": "b3b069766a0f2de45785ae84469cc056b5ab3c2a667d33370ff4b1facdaf022f"
+        },
+        {
+          "name": "package/src/components/ToolCall.js",
+          "mode": "0644",
+          "size": 7496,
+          "sha256": "04e75c1194b8eb84a7140b844f02c72346d87f37226a0f22839d1987e27e19fa"
+        },
+        {
+          "name": "package/src/trusted-folders.js",
+          "mode": "0644",
+          "size": 4423,
+          "sha256": "6ae7d92cf769ac136abef277401d2727c39453e919a66663c4293dd186922f33"
+        },
+        {
+          "name": "package/src/components/Turn.js",
+          "mode": "0644",
+          "size": 2747,
+          "sha256": "9934c117d996eb747e04e972ab9af81976b8665354e7f169a64f90dc159cc2cf"
+        },
+        {
+          "name": "package/src/contract.json",
+          "mode": "0644",
+          "size": 1173,
+          "sha256": "b0ef54342f80a9ee27752b697b0b56b5fa3cc707ad949e97f6b78dfc8a438112"
+        },
+        {
+          "name": "package/package.json",
+          "mode": "0644",
+          "size": 1541,
+          "sha256": "4ed2907122f1bd01c283f999ed9973968d3d9611f700211e74e345adc9dc9f40"
+        },
+        {
+          "name": "package/README.md",
+          "mode": "0644",
+          "size": 797,
+          "sha256": "1954397383187bca35aea8f3bb253e6b4b4d02098335dd073af3af6e4e9fd854"
+        }
+      ]
+    },
+    "lumeri-quanta": {
+      "frozenFrom": "npm:lumeri-quanta@1.0.1",
+      "artifact": {
+        "filename": "lumeri-quanta-1.0.1.tgz",
+        "sha256": "37bbbc58ab299fa0e9d58ac2b0056f4185fc3e413a9bea27b095d17a7d6dd9ac",
+        "entryCount": 40
+      },
+      "exactToolchain": {
+        "node": "22.23.2",
+        "npm": "11.17.0"
+      },
+      "entries": [
+        {
+          "name": "package/LICENSE",
+          "mode": "0644",
+          "size": 1065,
+          "sha256": "b064508a467c6f95408d108ff3425f15c5644facdeebe6fce645b1ad68dab12b"
+        },
+        {
+          "name": "package/src/api.js",
+          "mode": "0644",
+          "size": 12407,
+          "sha256": "a9cf4ba86a1af459b33e33071f6d757396cd0003d0538708d56d1d908c39db85"
+        },
+        {
+          "name": "package/src/App.js",
+          "mode": "0644",
+          "size": 66113,
+          "sha256": "b3b4fdaa93e07d94131c0f7bf25ba3f9a74c8c854723a57bfac8622ef4a40faa"
+        },
+        {
+          "name": "package/src/ask.js",
+          "mode": "0644",
+          "size": 6382,
+          "sha256": "978ce2132be76040a06ad65af6eada74da127acddec6fa63964cbf68ca0afdd6"
+        },
+        {
+          "name": "package/src/components/AskPrompt.js",
+          "mode": "0644",
+          "size": 1372,
+          "sha256": "c784e5b87ac13d1dd1f0ade22143e4db32a73da07f5b72adf3e864eede749ba5"
+        },
+        {
+          "name": "package/src/components/Banner.js",
+          "mode": "0644",
+          "size": 1024,
+          "sha256": "2fbf8d83ca94ecfb0a53f9d051cebfb4b4a2d1ab3bf2bd65c098face5d004458"
+        },
+        {
+          "name": "package/bin/cli.js",
+          "mode": "0755",
+          "size": 7578,
+          "sha256": "554b0d8505ebad76178664462e0aa9ca9621b787a736ffbc38944da3bf2c8bd4"
+        },
+        {
+          "name": "package/src/contract.js",
+          "mode": "0644",
+          "size": 744,
+          "sha256": "96f08cbbb885a2a0a412700bbc2290827fe2749d7e52b2ce67f1d777ee535610"
+        },
+        {
+          "name": "package/src/format.js",
+          "mode": "0644",
+          "size": 8444,
+          "sha256": "61b60b7489845b7b49c6d511ea2a9a5ae6322224c4ff8b62bfbf5a6b39d920cd"
+        },
+        {
+          "name": "package/src/html.js",
+          "mode": "0644",
+          "size": 270,
+          "sha256": "7ce2ea918aca7eb8728804d3e710a13e55b9763f91255d266a2caccffd485364"
+        },
+        {
+          "name": "package/src/http.js",
+          "mode": "0644",
+          "size": 5471,
+          "sha256": "fc2d8171b5ff498fb6afeb520e52a47dc2c0d96cfcb0d639a3a4302ecab4575b"
+        },
+        {
+          "name": "package/src/components/InputBox.js",
+          "mode": "0644",
+          "size": 11492,
+          "sha256": "d9709d9be0b58bb0b62d0b9b43341390eaf3c737d816814a5f9f20badafe8381"
+        },
+        {
+          "name": "package/src/logo.js",
+          "mode": "0644",
+          "size": 1022,
+          "sha256": "b536a53a0587db4f98bfb35bb03070b12203789f1d18be3735c736fddc52a0cd"
+        },
+        {
+          "name": "package/src/luqu-file.js",
+          "mode": "0644",
+          "size": 16626,
+          "sha256": "64e385c11a0ae09482e5cabb4cc2ae39a24a6064de1bcecb6b4629ad1119b1ca"
+        },
+        {
+          "name": "package/bin/luqu.js",
+          "mode": "0755",
+          "size": 85,
+          "sha256": "629e8428346df1718d9091ad837f67557e426ebc9c5e3345c1fde67663b9eeb4"
+        },
+        {
+          "name": "package/src/markdown.js",
+          "mode": "0644",
+          "size": 5408,
+          "sha256": "20a4be473fb75ec0065a01645c4cf43724da6dabc747d9cc1c9b30eb6d343261"
+        },
+        {
+          "name": "package/src/components/Notice.js",
+          "mode": "0644",
+          "size": 2672,
+          "sha256": "06bca1e38d97d6140eb0bd1947efb2fe117b16a8efd3328d2d94db19ef4d6113"
+        },
+        {
+          "name": "package/src/open.js",
+          "mode": "0644",
+          "size": 2038,
+          "sha256": "85da6f6f57cda66e197d02b0fea9873efa0487e9aec30c099446f722c9042d2f"
+        },
+        {
+          "name": "package/src/output-schema.js",
+          "mode": "0644",
+          "size": 2604,
+          "sha256": "5a86ed20761fe18b5b20d9c7843ee9713d4836fce235a462283f2d8e03d5e0ef"
+        },
+        {
+          "name": "package/src/product.js",
+          "mode": "0644",
+          "size": 590,
+          "sha256": "288f11dc962fa5f8dd43d3c2f611d49aef784bd06d5d95019443c3a45fcf5fe3"
+        },
+        {
+          "name": "package/src/projects.js",
+          "mode": "0644",
+          "size": 2585,
+          "sha256": "871519d243051a2604c9ba7e67a24a1cda7a874e0fb93338fb2dc90d40607649"
+        },
+        {
+          "name": "package/src/prompt-cli.js",
+          "mode": "0644",
+          "size": 9255,
+          "sha256": "a5c8408787cae5f13c68e2c9164ac01654e65dbe0485f6e9f290e1488cbb68bb"
+        },
+        {
+          "name": "package/src/quanta.js",
+          "mode": "0644",
+          "size": 3388,
+          "sha256": "303ce8549edb5edd7cb225b88e4f855763395a8e93ce2a79ffcf331594b3bf55"
+        },
+        {
+          "name": "package/src/runtime-config.js",
+          "mode": "0644",
+          "size": 1159,
+          "sha256": "797418354757acba72c6853cf055217db42ef79de36fb32f5657503ff8e43dd8"
+        },
+        {
+          "name": "package/src/setup-cli.js",
+          "mode": "0644",
+          "size": 2424,
+          "sha256": "b8f9758402e2f3d99fbb8b16c3e12be918580a218a0f321498584473b9fb3471"
+        },
+        {
+          "name": "package/src/slash.js",
+          "mode": "0644",
+          "size": 4178,
+          "sha256": "b9195b85ac5bf982e6ff5bc882b54af8926c56bb326b843ebff421f9b24ebe33"
+        },
+        {
+          "name": "package/src/spinner.js",
+          "mode": "0644",
+          "size": 528,
+          "sha256": "6421dd75f18650b3047016dfd4fcd4b9e6ecb9edae8f47f9f02d782e884364c3"
+        },
+        {
+          "name": "package/src/components/Splash.js",
+          "mode": "0644",
+          "size": 2350,
+          "sha256": "223d8b70dc77b620973e9f39d8fcb296b920b592efcc5d0ab4165e04351a560c"
+        },
+        {
+          "name": "package/src/sse.js",
+          "mode": "0644",
+          "size": 8401,
+          "sha256": "5fa17e82bb6f3793bca1ba9361af2b975f540d4e6ef5c629b48d824c0dfa3b87"
+        },
+        {
+          "name": "package/src/components/StarterSuggestions.js",
+          "mode": "0644",
+          "size": 1851,
+          "sha256": "c6e87142f7749caf9ee927a7af1d15d810f7e143a7d119ee5b827dd878b0bf97"
+        },
+        {
+          "name": "package/src/components/StatusLine.js",
+          "mode": "0644",
+          "size": 2112,
+          "sha256": "1353fc5bc56347434e92217a06fb686a4ec54a75dc2b4950e1677ba39b3290b2"
+        },
+        {
+          "name": "package/src/terminal-output.js",
+          "mode": "0644",
+          "size": 701,
+          "sha256": "7300de2a8341c83ef35703acfcb0128c4533749745483a62d72b5b247d5139ff"
+        },
+        {
+          "name": "package/src/terminal-title.js",
+          "mode": "0644",
+          "size": 1583,
+          "sha256": "90232582e1c356d2980ff6672fadacbcdca542efc06a8cd9c4ac66bbff0ed414"
+        },
+        {
+          "name": "package/src/theme.js",
+          "mode": "0644",
+          "size": 3076,
+          "sha256": "b3b069766a0f2de45785ae84469cc056b5ab3c2a667d33370ff4b1facdaf022f"
+        },
+        {
+          "name": "package/src/components/ToolCall.js",
+          "mode": "0644",
+          "size": 7496,
+          "sha256": "04e75c1194b8eb84a7140b844f02c72346d87f37226a0f22839d1987e27e19fa"
+        },
+        {
+          "name": "package/src/trusted-folders.js",
+          "mode": "0644",
+          "size": 4423,
+          "sha256": "6ae7d92cf769ac136abef277401d2727c39453e919a66663c4293dd186922f33"
+        },
+        {
+          "name": "package/src/components/Turn.js",
+          "mode": "0644",
+          "size": 2747,
+          "sha256": "9934c117d996eb747e04e972ab9af81976b8665354e7f169a64f90dc159cc2cf"
+        },
+        {
+          "name": "package/src/contract.json",
+          "mode": "0644",
+          "size": 1173,
+          "sha256": "b0ef54342f80a9ee27752b697b0b56b5fa3cc707ad949e97f6b78dfc8a438112"
+        },
+        {
+          "name": "package/package.json",
+          "mode": "0644",
+          "size": 1553,
+          "sha256": "2c860f3c3624cf873df5d9143ee5981ab795b03eccd7b49b9e516fd4d2286aab"
+        },
+        {
+          "name": "package/README.md",
+          "mode": "0644",
+          "size": 872,
+          "sha256": "94ca1928498841fcffebe4a6a9002871ec50ccd02c6f6d7c3a2881e0d0116f39"
+        }
+      ]
+    },
+    "lumeri-cli": {
+      "frozenFrom": "npm:lumeri-cli@1.0.0",
+      "artifact": {
+        "filename": "lumeri-cli-1.0.0.tgz",
+        "sha256": "dceb7db4255421d7db785d10bcf696119104065b75ec8b199f6f0523ef75d9a9",
+        "entryCount": 41
+      },
+      "exactToolchain": {
+        "node": "26.5.0",
+        "npm": "11.17.0"
+      },
+      "entries": [
+        {
+          "name": "package/LICENSE",
+          "mode": "0644",
+          "size": 1065,
+          "sha256": "b064508a467c6f95408d108ff3425f15c5644facdeebe6fce645b1ad68dab12b"
+        },
+        {
+          "name": "package/README.md",
+          "mode": "0644",
+          "size": 9683,
+          "sha256": "b005ab1e68f6252eb2355733f9587d16104b9243f5c75cef6cb3de43071988bb"
+        },
+        {
+          "name": "package/bin/cli.js",
+          "mode": "0755",
+          "size": 7578,
+          "sha256": "554b0d8505ebad76178664462e0aa9ca9621b787a736ffbc38944da3bf2c8bd4"
+        },
+        {
+          "name": "package/bin/luqu.js",
+          "mode": "0755",
+          "size": 85,
+          "sha256": "629e8428346df1718d9091ad837f67557e426ebc9c5e3345c1fde67663b9eeb4"
+        },
+        {
+          "name": "package/bin/luvi.js",
+          "mode": "0755",
+          "size": 84,
+          "sha256": "2a57bfab523b0d16fa461c67a3991b75329f0165ef3d1fa1d385f34c7c631d20"
+        },
+        {
+          "name": "package/package.json",
+          "mode": "0644",
+          "size": 2535,
+          "sha256": "75bfdcedaaece88ed95382ab309c811e252e7c35303e7bb0cd3be9ebafd29bed"
+        },
+        {
+          "name": "package/src/App.js",
+          "mode": "0644",
+          "size": 64254,
+          "sha256": "6150c5bac164a7c4dbd6bfd9064eddc48af992c43fb99ad30014fcc8a913a3fa"
+        },
+        {
+          "name": "package/src/api.js",
+          "mode": "0644",
+          "size": 11324,
+          "sha256": "fbcc45aebe82761e43e5a4bd1a7b7bfaaabd3abb3dda700676b68d30a6a06168"
+        },
+        {
+          "name": "package/src/ask.js",
+          "mode": "0644",
+          "size": 6382,
+          "sha256": "978ce2132be76040a06ad65af6eada74da127acddec6fa63964cbf68ca0afdd6"
+        },
+        {
+          "name": "package/src/components/AskPrompt.js",
+          "mode": "0644",
+          "size": 1278,
+          "sha256": "6081a12e0141fd1b834578a397a71a4edc5861f50d3c03998382a231b2eca8eb"
+        },
+        {
+          "name": "package/src/components/Banner.js",
+          "mode": "0644",
+          "size": 1024,
+          "sha256": "2fbf8d83ca94ecfb0a53f9d051cebfb4b4a2d1ab3bf2bd65c098face5d004458"
+        },
+        {
+          "name": "package/src/components/InputBox.js",
+          "mode": "0644",
+          "size": 11171,
+          "sha256": "3fea41748263c9e5717e3bed3a8ddb3a01e7d860189ed84e892691aed62c4b46"
+        },
+        {
+          "name": "package/src/components/Notice.js",
+          "mode": "0644",
+          "size": 2578,
+          "sha256": "bf8f843fbe93ee114a6d57a2f3994bc0189c1a832293e59f019a1918fdd0ea57"
+        },
+        {
+          "name": "package/src/components/Splash.js",
+          "mode": "0644",
+          "size": 2350,
+          "sha256": "223d8b70dc77b620973e9f39d8fcb296b920b592efcc5d0ab4165e04351a560c"
+        },
+        {
+          "name": "package/src/components/StarterSuggestions.js",
+          "mode": "0644",
+          "size": 1775,
+          "sha256": "5b49af291a7273f9623560a1feabef286e7d520da851e8ca7341e2383b72a019"
+        },
+        {
+          "name": "package/src/components/StatusLine.js",
+          "mode": "0644",
+          "size": 2018,
+          "sha256": "fa4f7474b26f49b686529240c9a087906021007013fd57b6753ea4d85ddd1396"
+        },
+        {
+          "name": "package/src/components/ToolCall.js",
+          "mode": "0644",
+          "size": 7128,
+          "sha256": "1370d7f8ee37dc6b5f192af6833cb31c9d4ec04bccacec45e1682bf7e145c1ad"
+        },
+        {
+          "name": "package/src/components/Turn.js",
+          "mode": "0644",
+          "size": 2635,
+          "sha256": "dcc582f03cd824c7753dde9840d1e06cddcc13d41a49396bbe90d9523a6133c5"
+        },
+        {
+          "name": "package/src/contract.js",
+          "mode": "0644",
+          "size": 744,
+          "sha256": "96f08cbbb885a2a0a412700bbc2290827fe2749d7e52b2ce67f1d777ee535610"
+        },
+        {
+          "name": "package/src/contract.json",
+          "mode": "0644",
+          "size": 1173,
+          "sha256": "b0ef54342f80a9ee27752b697b0b56b5fa3cc707ad949e97f6b78dfc8a438112"
+        },
+        {
+          "name": "package/src/format.js",
+          "mode": "0644",
+          "size": 8444,
+          "sha256": "61b60b7489845b7b49c6d511ea2a9a5ae6322224c4ff8b62bfbf5a6b39d920cd"
+        },
+        {
+          "name": "package/src/html.js",
+          "mode": "0644",
+          "size": 270,
+          "sha256": "7ce2ea918aca7eb8728804d3e710a13e55b9763f91255d266a2caccffd485364"
+        },
+        {
+          "name": "package/src/http.js",
+          "mode": "0644",
+          "size": 3604,
+          "sha256": "b990076a5e7b7b0f4e89a3e84db7e3714bbeeaa8e3c47a668ac744b959903be9"
+        },
+        {
+          "name": "package/src/logo.js",
+          "mode": "0644",
+          "size": 1022,
+          "sha256": "b536a53a0587db4f98bfb35bb03070b12203789f1d18be3735c736fddc52a0cd"
+        },
+        {
+          "name": "package/src/luqu-file.js",
+          "mode": "0644",
+          "size": 10501,
+          "sha256": "9862d4f1c4cb0a588ed28d9779287bf13007bd61ce77ff12489589f7edc7160b"
+        },
+        {
+          "name": "package/src/markdown.js",
+          "mode": "0644",
+          "size": 5347,
+          "sha256": "0da0b4086e80d1f06fd34610a043e461b4926170ffc47a3ec6ad2a391f0b3204"
+        },
+        {
+          "name": "package/src/open.js",
+          "mode": "0644",
+          "size": 1521,
+          "sha256": "b656c92fa22235fad857206b302a1fc4912dd7044113a1871a5f9125effce863"
+        },
+        {
+          "name": "package/src/output-schema.js",
+          "mode": "0644",
+          "size": 2604,
+          "sha256": "5a86ed20761fe18b5b20d9c7843ee9713d4836fce235a462283f2d8e03d5e0ef"
+        },
+        {
+          "name": "package/src/product.js",
+          "mode": "0644",
+          "size": 590,
+          "sha256": "288f11dc962fa5f8dd43d3c2f611d49aef784bd06d5d95019443c3a45fcf5fe3"
+        },
+        {
+          "name": "package/src/projects.js",
+          "mode": "0644",
+          "size": 2585,
+          "sha256": "871519d243051a2604c9ba7e67a24a1cda7a874e0fb93338fb2dc90d40607649"
+        },
+        {
+          "name": "package/src/prompt-cli.js",
+          "mode": "0644",
+          "size": 7820,
+          "sha256": "6c5efdcc3ee8193b4a09fd1eb771e95d2a7a9c9ea682ebe0f20cc56f9507ba64"
+        },
+        {
+          "name": "package/src/quanta.js",
+          "mode": "0644",
+          "size": 3388,
+          "sha256": "303ce8549edb5edd7cb225b88e4f855763395a8e93ce2a79ffcf331594b3bf55"
+        },
+        {
+          "name": "package/src/roughcut-cli.js",
+          "mode": "0644",
+          "size": 4646,
+          "sha256": "e879e039e8f06a3be972101ba536f5304a425295d2ace9e1be3703e7fcd23a5e"
+        },
+        {
+          "name": "package/src/runtime-config.js",
+          "mode": "0644",
+          "size": 1159,
+          "sha256": "797418354757acba72c6853cf055217db42ef79de36fb32f5657503ff8e43dd8"
+        },
+        {
+          "name": "package/src/setup-cli.js",
+          "mode": "0644",
+          "size": 2424,
+          "sha256": "b8f9758402e2f3d99fbb8b16c3e12be918580a218a0f321498584473b9fb3471"
+        },
+        {
+          "name": "package/src/slash.js",
+          "mode": "0644",
+          "size": 4178,
+          "sha256": "b9195b85ac5bf982e6ff5bc882b54af8926c56bb326b843ebff421f9b24ebe33"
+        },
+        {
+          "name": "package/src/spinner.js",
+          "mode": "0644",
+          "size": 528,
+          "sha256": "6421dd75f18650b3047016dfd4fcd4b9e6ecb9edae8f47f9f02d782e884364c3"
+        },
+        {
+          "name": "package/src/sse.js",
+          "mode": "0644",
+          "size": 4619,
+          "sha256": "bf693f95c3c3b362b37578469d344b74967ec0101fbadfc0023ffa6c18cb0854"
+        },
+        {
+          "name": "package/src/terminal-title.js",
+          "mode": "0644",
+          "size": 1583,
+          "sha256": "90232582e1c356d2980ff6672fadacbcdca542efc06a8cd9c4ac66bbff0ed414"
+        },
+        {
+          "name": "package/src/theme.js",
+          "mode": "0644",
+          "size": 3076,
+          "sha256": "b3b069766a0f2de45785ae84469cc056b5ab3c2a667d33370ff4b1facdaf022f"
+        },
+        {
+          "name": "package/src/trusted-folders.js",
+          "mode": "0644",
+          "size": 3662,
+          "sha256": "d011420f87f5931632382aa488fc5f016bdcadea31184e584b8c982b8004f6c4"
+        }
+      ]
+    }
+  }
+}

@@ -6,6 +6,7 @@
 import { Box, Text } from "ink";
 import { html } from "./html.js";
 import { color, glyph } from "./theme.js";
+import { terminalSafeText } from "./terminal-output.js";
 
 const INLINE_RE =
   /(\*\*|__)([\s\S]+?)\1|(\*|_)(?=\S)([\s\S]+?)(?<=\S)\3|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)/g;
@@ -92,7 +93,7 @@ const BLOCK_START = /^\s*(#{1,6}\s|>|```|([-*+]|\d+\.)\s)/;
 const HR_RE = /^\s*([-*_])\1\1+\s*$/;
 
 export function renderMarkdown(src, kp = "md") {
-  const lines = String(src ?? "").replace(/\r\n/g, "\n").split("\n");
+  const lines = terminalSafeText(src).replace(/\r\n/g, "\n").split("\n");
   const blocks = [];
   let i = 0;
   let b = 0;
