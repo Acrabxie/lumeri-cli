@@ -1,5 +1,13 @@
 # Lumeri Video and Quanta CLI
 
+This source branch prepares an **unpublished local LF2 candidate**. The
+published combined package remains at its frozen version; this candidate keeps
+that label until a new release is chosen and fails published-lock verification.
+It adds `luvi lf2 --help` through an official Codex process and an owned isolated
+source Runtime, currently fixed to an 8s/720p/30fps film. It does not connect to
+a daily App account. See [the LF2 guide](docs/lf2-codex-cli.md). Quanta has no LF2
+entry; the existing combined Runtime-client behavior below is retained.
+
 A pair of product-scoped terminal clients for **Lumeri v3**: `luvi` for
 **Lumeri Video** and `luqu` for **Lumeri Quanta**. Both use a TUI modeled on
 Claude Code: a streaming chat transcript, live tool-call cards, FFmpeg

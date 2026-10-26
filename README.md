@@ -13,6 +13,14 @@ The root project is a private, non-publishable development workspace. Each
 publishable package has an explicit template and file allowlist under
 [`packages/`](./packages/).
 
+This branch also prepares an **unpublished local LF2 candidate** for Video and
+the combined package. `node bin/luvi.js lf2 --help` describes the explicit film
+trial: an official Codex process supplies the subscribed model, while an owned,
+isolated source Runtime supplies LF2 rendering. It currently fixes output to
+8 seconds at 1280×720/30fps and does not connect to a daily App account.
+See [the LF2 trial guide](./docs/lf2-codex-cli.md). The install commands below
+still retrieve the published clients, which do not yet have this command.
+
 ## Install the CLIs
 
 The published CLIs require Node.js 22 or newer.
@@ -65,9 +73,11 @@ expect Lumeri Runtime at `http://127.0.0.1:7788` by default; use `--server
 
 These packages are Runtime clients. They contain terminal presentation,
 product-scoped request handling, local format validation, and the Runtime HTTP
-and SSE transport.
+and SSE transport. The local LF2 candidate additionally exchanges the four
+declared film tools with an official `codex app-server` child process; Codex
+continues to own its login and subscription access.
 
-They do not implement account sign-in or switching, select or configure model
+They do not implement account sign-in or switching, implement model
 providers, import subscription credentials, read API keys, install the Runtime,
 or process media locally. Those responsibilities remain with the installed
 Lumeri product and Runtime. A Runtime access refusal is exposed only as a
@@ -133,6 +143,22 @@ The three exact pack commands are toolchain-specific: use Node 22.23.2 with npm
 11.17.0 for `pack:video` and `pack:quanta`, and Node 26.5.0 with npm 11.17.0 for
 `pack:compat`.
 
+On this candidate branch, `pack:video`, `pack:compat` and the three-package
+release-verification commands intentionally fail against the unchanged
+published lock. To assemble local, unverified trial archives in a fresh folder:
+
+```sh
+node scripts/pack-package.mjs lumeri-video --out-dir /absolute/local-lf2-candidate
+node scripts/pack-package.mjs lumeri-cli --out-dir /absolute/local-lf2-candidate
+```
+
+These archives retain the old package version labels solely because no next
+release version has been selected. They are local candidates, not replacements
+for the published archives. The full test suite checks their allowlists,
+Runtime-client loading and LF2 help, and requires frozen release verification
+to reject them. Quanta's payload remains frozen and verified. A new version and
+release lock require a separate release decision before publication.
+
 [`release-lock.json`](./release-lock.json) records the exact published 1.0.1
 split payload and artifact hashes alongside the exact published combined 1.0.0
 compatibility payload. The split Video and Quanta tarballs reproduce
@@ -140,15 +166,14 @@ byte-for-byte under Node 22.23.2 with npm 11.17.0. The frozen combined
 compatibility tarball used Node 26.5.0 with npm 11.17.0; Node 22 reproduces and
 verifies its complete payload, while the gzip byte stream differs by producer.
 
-Files under `packages/lumeri-cli/` preserve the exact published 1.0.0
-compatibility payload, including its historical README. Its root-level
-`npm link` development instructions are therefore non-normative; use this root
-README for current development commands.
+Existing implementation overrides under `packages/lumeri-cli/` retain the
+published compatibility behavior; only the candidate's additive LF2 surface
+and documentation change. Use this root README for current development commands.
 
-CI runs the public-boundary, Runtime, and IME tests. Its Node 22.23.2 job
-reproduces the two split tarballs exactly and verifies the combined payload; a
-separate Node 26.5.0 job reproduces the combined compatibility tarball exactly.
-Both use npm 11.17.0, and neither publishes.
+CI runs the public-boundary, Runtime, and IME tests. Its frozen-release jobs
+remain gated by the published lock; they will reject this unpublished LF2
+candidate until a separately authorized release updates it. Both use npm
+11.17.0, and neither publishes.
 
 ## Repository layout
 

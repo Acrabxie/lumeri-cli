@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
 const TEST_NODE = process.env.PACKAGE_TEST_NODE_BIN || process.env.NODE22_BIN || process.execPath;
@@ -28,10 +28,12 @@ assert.match(npmVersion, /^\d+\.\d+\.\d+$/, "npm must run under the selected Nod
 
 const lock = JSON.parse(fs.readFileSync(path.join(REPO, "release-lock.json"), "utf8"));
 const SPECS = [
-  { id: "lumeri-video", version: "1.0.1", count: 39, bins: ["luvi"], absent: ["luqu"], wrongCommand: "check" },
+  { id: "lumeri-video", version: "1.0.1", count: 39, candidate: true, bins: ["luvi"], absent: ["luqu"], wrongCommand: "check" },
   { id: "lumeri-quanta", version: "1.0.1", count: 40, bins: ["luqu"], absent: ["luvi"], wrongCommand: "roughcut" },
-  { id: "lumeri-cli", version: "1.0.0", count: 41, bins: ["luqu", "luvi"], absent: [], wrongCommand: null },
+  { id: "lumeri-cli", version: "1.0.0", count: 41, candidate: true, bins: ["luqu", "luvi"], absent: [], wrongCommand: null },
 ];
+const LF2_FILES = ["src/lf2-cli.js", "src/lf2/runtime.js", "src/lf2/resources.js", "src/lf2/codex-app-server.js",
+  "docs/lf2-codex-cli.md", "examples/lf2/vector-city-brief.txt"];
 const FORBIDDEN_PATH = /^(?:\.npmrc|bin\/lumeri\.js|src\/auth(?:-cli)?\.js|src\/components\/LoginGate\.js|src\/(?:codex|providers)\/|scripts\/|test\/|web\/|.*(?:\.log|token-usage|\.DS_Store)|(?:^|\/)\._)/;
 const FORBIDDEN_ACTIVE = /\b(?:OPENAI_API_KEY|ANTHROPIC_API_KEY|GOOGLE_APPLICATION_CREDENTIALS|CODEX_AUTH_PATH)\b|auth\.openai\.com|chatgpt\.com\/backend-api\/codex|backend-api\/codex|(?:\.codex\/auth\.json|\.lumeri\/(?:accounts|codex-auth)|\.gemia\/accounts)|(?:from|import\s*\()\s*["'][^"']*\/(?:auth(?:-cli)?|codex|providers)(?:\/|\.|["'])|["'`]\/(?:auth|accounts|model)(?:\/|["'`])|\b(?:createCodexProvider|createDefaultRouter|apikeyProvider|codexProvider|vertexProvider|LoginGate)\b/i;
 const LIFECYCLE = [
@@ -47,13 +49,13 @@ function usesExactToolchain(spec) {
   return nodeVersion === `v${exact.node}` && npmVersion === exact.npm;
 }
 
-function buildArgs(spec, outDir, { requireExact = usesExactToolchain(spec) } = {}) {
+function buildArgs(spec, outDir, { verify = !spec.candidate, requireExact = !spec.candidate && usesExactToolchain(spec) } = {}) {
   const args = [
     path.join(REPO, "scripts", "pack-package.mjs"),
     spec.id,
     "--out-dir", outDir,
-    "--verify",
   ];
+  if (verify) args.push("--verify");
   if (requireExact) args.push("--require-exact");
   return args;
 }
@@ -90,10 +92,20 @@ try {
     assert.equal(first.packageId, spec.id);
     assert.equal(first.name, spec.id);
     assert.equal(first.version, spec.version);
-    assert.equal(first.entryCount, spec.count);
-    assert.equal(first.entryCount, frozen.artifact.entryCount);
-    assert.equal(first.payloadVerified, true);
-    if (usesExactToolchain(spec)) {
+    // Published expectations stay frozen; candidate checks must not silently
+    // rebaseline release-lock or claim that new LF2 bytes were published.
+    assert.equal(frozen.artifact.entryCount, spec.count);
+    assert.equal(first.entryCount, spec.count + (spec.candidate ? LF2_FILES.length : 0));
+    assert.equal(first.payloadVerified, !spec.candidate);
+    if (spec.candidate) {
+      assert.equal(first.exactVerified, false);
+      assert.notEqual(first.sha256, frozen.artifact.sha256);
+      const refusedDir = path.join(temp, `${spec.id}-frozen-refused`);
+      const refused = spawnSync(TEST_NODE, buildArgs(spec, refusedDir, { verify: true, requireExact: usesExactToolchain(spec) }), { cwd: REPO, encoding: "utf8", env });
+      assert.notEqual(refused.status, 0, `${spec.id}: the published release lock must reject LF2 candidate bytes`);
+      assert.match(refused.stderr, /expected \d+ entries, got \d+|mismatch/);
+      assert.deepEqual(fs.readdirSync(refusedDir), [], "failed release verification must not promote a candidate artifact");
+    } else if (usesExactToolchain(spec)) {
       assert.equal(first.exactVerified, true);
       assert.equal(first.sha256, frozen.artifact.sha256);
     }
@@ -115,6 +127,7 @@ try {
     const template = JSON.parse(fs.readFileSync(path.join(templateRoot, "package.json"), "utf8"));
     const expectedEntries = ["LICENSE", "README.md", "package.json", ...template.files].sort();
     assert.deepEqual(entries, expectedEntries);
+    for (const entry of LF2_FILES) assert.equal(entries.includes(entry), Boolean(spec.candidate), `${spec.id}: ${entry} product scope`);
     assert.equal(entries.some((entry) => FORBIDDEN_PATH.test(entry)), false);
     assert.equal(entries.includes("binding.gyp"), false, `${spec.id} must not trigger implicit node-gyp install`);
 
@@ -173,6 +186,22 @@ try {
       const setupHelp = runInstalled(installedBin, ["setup", "--help"]);
       assert.equal(setupHelp.status, 0, setupHelp.stderr);
       assert.doesNotMatch(setupHelp.stdout, /login|logout|whoami|account|ChatGPT|Codex|OAuth|PKCE|API.?key|BYOK/i);
+      const lf2 = runInstalled(installedBin, ["lf2", "--help"]);
+      if (name === "luvi") {
+        assert.equal(lf2.status, 0, lf2.stderr);
+        assert.match(lf2.stdout, /luvi lf2/);
+        assert.match(lf2.stdout, /isolated local LF2 Runtime/);
+        const installedRoot = path.dirname(path.dirname(fs.realpathSync(installedBin)));
+        const load = runInstalled(TEST_NODE, ["--input-type=module", "--eval",
+          `const runtime = await import(${JSON.stringify(pathToFileURL(path.join(installedRoot, "src/lf2/runtime.js")).href)});` +
+          `const cli = await import(${JSON.stringify(pathToFileURL(path.join(installedRoot, "src/lf2-cli.js")).href)});` +
+          "if (typeof runtime.createLf2Runtime !== 'function' || typeof cli.runLf2 !== 'function') throw new Error('Missing LF2 exports'); process.stdout.write('LF2 imports loaded');"]);
+        assert.equal(load.status, 0, load.stderr);
+        assert.equal(load.stdout, "LF2 imports loaded");
+      } else {
+        assert.equal(lf2.status, 2, "Quanta must reject the Video-only LF2 command locally");
+        assert.doesNotMatch(help.stdout, /lf2/i);
+      }
     }
     if (spec.wrongCommand) {
       const rejected = runInstalled(path.join(prefix, "bin", spec.bins[0]), [spec.wrongCommand]);
@@ -214,7 +243,7 @@ try {
     encoding: "utf8",
     env,
   });
-  assert.notEqual(failedExact.status, 0, "an exact hash mismatch must fail");
+  assert.notEqual(failedExact.status, 0, "a different frozen payload or exact-toolchain hash must fail verification");
   assert.equal(
     fs.existsSync(path.join(failedDir, lock.packages[mismatched.id].artifact.filename)),
     false,
@@ -230,7 +259,7 @@ try {
   ], { cwd: REPO, encoding: "utf8", env });
   assert.notEqual(missingOutDir.status, 0, "--out-dir must reject another flag as its value");
 
-  process.stdout.write(`✓ three reproducible public packages verified with ${nodeVersion} / npm ${npmVersion}\n`);
+  process.stdout.write(`✓ two unpublished LF2 candidates and frozen Quanta package validated with ${nodeVersion} / npm ${npmVersion}; published locks retained\n`);
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }

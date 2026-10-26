@@ -1,0 +1,4 @@
+Acrab wants an original 8-second silent vector motion film, 16:9, 1280x720 at 30fps.
+Story: one dot opens into elegant orbital paths; the orbiting dots settle and grow into a small city with buildings, trees and a little passing train. End on a clear composed city view.
+Art direction: warm ivory paper, deep ink/teal, coral and ochre accents, crisp flat SVG shapes, generous negative space, restrained Chinese typography, smooth purposeful motion. Title: 一座城，从一点开始。
+This is an independent text-to-film comparison. Create your own vector composition and animation code. Do not inspect or copy any previous film. Use the LF2 tools to author it, look at actual preview frames across the story, fix visible problems if needed, and export both MP4 and high-fidelity MOV. The files must exist before you report completion.
