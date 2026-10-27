@@ -102,11 +102,13 @@ test('argument parser requires explicit runtime/output and one prompt, no provid
   assert.equal(parseLf2Args(['--help']).help, true);
 });
 
-test('shared resource limits use exact memory formula and 1.2GiB floor', () => {
+test('macOS resource preflight accepts memory use above 15GiB and retains the 1.2GiB Data floor', () => {
   const vm = 'page size of 16384 bytes\nAnonymous pages: 300000.\nPages purgeable: 5000.\nPages wired down: 200000.\nPages occupied by compressor: 300000.';
   const disk = 'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk 999999 0 2000000 1% /System/Volumes/Data';
   assert.equal(parseMacResources(vm, disk).memoryBytes, 795000 * 16384);
-  assert.throws(() => parseMacResources(vm.replace('300000.', '500000.'), disk), /15 GiB/);
+  const busy = parseMacResources(vm.replace('300000.', '1500000.'), disk);
+  assert.equal(busy.memoryBytes, 1995000 * 16384);
+  assert.ok(busy.memoryBytes > 15 * 1024 ** 3);
   assert.throws(() => parseMacResources(vm, disk.replace('2000000', '1000000')), /1.2 GiB/);
 });
 

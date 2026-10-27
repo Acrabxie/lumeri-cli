@@ -19,6 +19,7 @@ the trial's fixed format. Built-in filesystem image reads are disabled;
 preview images arrive only through the declared LF2 tool responses. The
 Runtime session has a zero model-spending budget; Codex supplies the model
 through its own ChatGPT subscription.
+On macOS, the CLI preflight requires at least 1.2 GiB of free Data space.
 
 This first integration is a local trial: it accepts an owned 0600 readiness
 file from an **isolated source Runtime**, and creates a new Project. It refuses
