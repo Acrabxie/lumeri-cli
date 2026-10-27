@@ -1,6 +1,6 @@
 {
   "name": "lumeri-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Lumeri Video and Lumeri Quanta terminal clients for the Lumeri v3 runtime",
   "type": "module",
   "license": "MIT",

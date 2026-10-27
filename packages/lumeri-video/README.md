@@ -12,9 +12,9 @@ npm install --global lumeri-video
 
 Requires Node.js 22 or newer.
 
-This source branch includes an unpublished local candidate for `luvi lf2`.
-The npm install above still retrieves the published client. Candidate archives
-retain the old version label and do not pass the published release lock.
+This source branch prepares an unpublished local 1.0.2 candidate for `luvi lf2`.
+The npm install above still retrieves the published client. The candidate has
+an approved local release freeze; verification does not establish publication.
 See [the LF2 guide](docs/lf2-codex-cli.md): the trial uses an official Codex
 process and an owned isolated source Runtime for an 8s/720p/30fps film; daily
 App authentication is outside its current scope.

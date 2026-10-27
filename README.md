@@ -13,8 +13,8 @@ The root project is a private, non-publishable development workspace. Each
 publishable package has an explicit template and file allowlist under
 [`packages/`](./packages/).
 
-This branch also prepares an **unpublished local LF2 candidate** for Video and
-the combined package. `node bin/luvi.js lf2 --help` describes the explicit film
+This branch prepares **unpublished local LF2 candidates**: Video 1.0.2 and
+combined CLI 1.0.1. `node bin/luvi.js lf2 --help` describes the explicit film
 trial: an official Codex process supplies the subscribed model, while an owned,
 isolated source Runtime supplies LF2 rendering. It currently fixes output to
 8 seconds at 1280×720/30fps and does not connect to a daily App account.
@@ -143,36 +143,30 @@ The three exact pack commands are toolchain-specific: use Node 22.23.2 with npm
 11.17.0 for `pack:video` and `pack:quanta`, and Node 26.5.0 with npm 11.17.0 for
 `pack:compat`.
 
-On this candidate branch, `pack:video`, `pack:compat` and the three-package
-release-verification commands intentionally fail against the unchanged
-published lock. To assemble local, unverified trial archives in a fresh folder:
+To assemble and verify local release candidates, choose a fresh output folder:
 
 ```sh
-node scripts/pack-package.mjs lumeri-video --out-dir /absolute/local-lf2-candidate
-node scripts/pack-package.mjs lumeri-cli --out-dir /absolute/local-lf2-candidate
+node scripts/pack-package.mjs lumeri-video --verify --require-exact --out-dir /absolute/local-lf2-candidate
+node scripts/pack-package.mjs lumeri-cli --verify --require-exact --out-dir /absolute/local-lf2-candidate
 ```
 
-These archives retain the old package version labels solely because no next
-release version has been selected. They are local candidates, not replacements
-for the published archives. The full test suite checks their allowlists,
-Runtime-client loading and LF2 help, and requires frozen release verification
-to reject them. Quanta's payload remains frozen and verified. A new version and
-release lock require a separate release decision before publication.
+[`release-lock.json`](./release-lock.json) freezes the approved local Video
+1.0.2 and combined CLI 1.0.1 payloads and artifacts. Their `frozenFrom` fields
+start with `local:`; they do not claim an npm release. Quanta's published 1.0.1
+lock and payload remain unchanged. The full suite checks positive verification,
+allowlists, Runtime-client loading, LF2 help and real temporary-prefix installs.
 
-[`release-lock.json`](./release-lock.json) records the exact published 1.0.1
-split payload and artifact hashes alongside the exact published combined 1.0.0
-compatibility payload. The split Video and Quanta tarballs reproduce
-byte-for-byte under Node 22.23.2 with npm 11.17.0. The frozen combined
-compatibility tarball used Node 26.5.0 with npm 11.17.0; Node 22 reproduces and
-verifies its complete payload, while the gzip byte stream differs by producer.
+Video and Quanta reproduce byte-for-byte under Node 22.23.2 with npm 11.17.0.
+The combined compatibility archive uses Node 26.5.0 with npm 11.17.0; Node 22
+verifies its complete payload while its gzip byte stream differs by producer.
+Publication remains a separate release decision.
 
 Existing implementation overrides under `packages/lumeri-cli/` retain the
 published compatibility behavior; only the candidate's additive LF2 surface
 and documentation change. Use this root README for current development commands.
 
 CI runs the public-boundary, Runtime, and IME tests. Its frozen-release jobs
-remain gated by the published lock; they will reject this unpublished LF2
-candidate until a separately authorized release updates it. Both use npm
+verify the approved local lock under their pinned toolchains. Both use npm
 11.17.0, and neither publishes.
 
 ## Repository layout
@@ -186,7 +180,7 @@ packages/lumeri-cli/         frozen combined compatibility overrides
 scripts/pack-package.mjs     allowlist-first generic packer
 scripts/verify-packages.mjs  three-package release-lock verification
 test/                        runtime, product, package, and boundary checks
-release-lock.json            frozen npm artifact and payload evidence
+release-lock.json            frozen artifact and payload evidence with provenance
 ```
 
 Security reports are handled according to [SECURITY.md](./SECURITY.md).

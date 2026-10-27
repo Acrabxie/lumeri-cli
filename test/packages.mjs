@@ -28,9 +28,9 @@ assert.match(npmVersion, /^\d+\.\d+\.\d+$/, "npm must run under the selected Nod
 
 const lock = JSON.parse(fs.readFileSync(path.join(REPO, "release-lock.json"), "utf8"));
 const SPECS = [
-  { id: "lumeri-video", version: "1.0.1", count: 39, candidate: true, bins: ["luvi"], absent: ["luqu"], wrongCommand: "check" },
+  { id: "lumeri-video", version: "1.0.2", count: 45, lf2: true, bins: ["luvi"], absent: ["luqu"], wrongCommand: "check" },
   { id: "lumeri-quanta", version: "1.0.1", count: 40, bins: ["luqu"], absent: ["luvi"], wrongCommand: "roughcut" },
-  { id: "lumeri-cli", version: "1.0.0", count: 41, candidate: true, bins: ["luqu", "luvi"], absent: [], wrongCommand: null },
+  { id: "lumeri-cli", version: "1.0.1", count: 47, lf2: true, bins: ["luqu", "luvi"], absent: [], wrongCommand: null },
 ];
 const LF2_FILES = ["src/lf2-cli.js", "src/lf2/runtime.js", "src/lf2/resources.js", "src/lf2/codex-app-server.js",
   "docs/lf2-codex-cli.md", "examples/lf2/vector-city-brief.txt"];
@@ -49,7 +49,7 @@ function usesExactToolchain(spec) {
   return nodeVersion === `v${exact.node}` && npmVersion === exact.npm;
 }
 
-function buildArgs(spec, outDir, { verify = !spec.candidate, requireExact = !spec.candidate && usesExactToolchain(spec) } = {}) {
+function buildArgs(spec, outDir, { verify = true, requireExact = usesExactToolchain(spec) } = {}) {
   const args = [
     path.join(REPO, "scripts", "pack-package.mjs"),
     spec.id,
@@ -92,20 +92,12 @@ try {
     assert.equal(first.packageId, spec.id);
     assert.equal(first.name, spec.id);
     assert.equal(first.version, spec.version);
-    // Published expectations stay frozen; candidate checks must not silently
-    // rebaseline release-lock or claim that new LF2 bytes were published.
+    // Video 1.0.2 / combined 1.0.1 are approved local freezes; Quanta retains
+    // its published freeze. Verification proves these bytes, not publication.
     assert.equal(frozen.artifact.entryCount, spec.count);
-    assert.equal(first.entryCount, spec.count + (spec.candidate ? LF2_FILES.length : 0));
-    assert.equal(first.payloadVerified, !spec.candidate);
-    if (spec.candidate) {
-      assert.equal(first.exactVerified, false);
-      assert.notEqual(first.sha256, frozen.artifact.sha256);
-      const refusedDir = path.join(temp, `${spec.id}-frozen-refused`);
-      const refused = spawnSync(TEST_NODE, buildArgs(spec, refusedDir, { verify: true, requireExact: usesExactToolchain(spec) }), { cwd: REPO, encoding: "utf8", env });
-      assert.notEqual(refused.status, 0, `${spec.id}: the published release lock must reject LF2 candidate bytes`);
-      assert.match(refused.stderr, /expected \d+ entries, got \d+|mismatch/);
-      assert.deepEqual(fs.readdirSync(refusedDir), [], "failed release verification must not promote a candidate artifact");
-    } else if (usesExactToolchain(spec)) {
+    assert.equal(first.entryCount, spec.count);
+    assert.equal(first.payloadVerified, true);
+    if (usesExactToolchain(spec)) {
       assert.equal(first.exactVerified, true);
       assert.equal(first.sha256, frozen.artifact.sha256);
     }
@@ -127,7 +119,7 @@ try {
     const template = JSON.parse(fs.readFileSync(path.join(templateRoot, "package.json"), "utf8"));
     const expectedEntries = ["LICENSE", "README.md", "package.json", ...template.files].sort();
     assert.deepEqual(entries, expectedEntries);
-    for (const entry of LF2_FILES) assert.equal(entries.includes(entry), Boolean(spec.candidate), `${spec.id}: ${entry} product scope`);
+    for (const entry of LF2_FILES) assert.equal(entries.includes(entry), Boolean(spec.lf2), `${spec.id}: ${entry} product scope`);
     assert.equal(entries.some((entry) => FORBIDDEN_PATH.test(entry)), false);
     assert.equal(entries.includes("binding.gyp"), false, `${spec.id} must not trigger implicit node-gyp install`);
 
@@ -259,7 +251,7 @@ try {
   ], { cwd: REPO, encoding: "utf8", env });
   assert.notEqual(missingOutDir.status, 0, "--out-dir must reject another flag as its value");
 
-  process.stdout.write(`✓ two unpublished LF2 candidates and frozen Quanta package validated with ${nodeVersion} / npm ${npmVersion}; published locks retained\n`);
+  process.stdout.write(`✓ approved local Video 1.0.2 / combined 1.0.1 freezes and unchanged Quanta 1.0.1 validated with ${nodeVersion} / npm ${npmVersion}; no publication claimed\n`);
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }

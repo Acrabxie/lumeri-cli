@@ -1,9 +1,9 @@
 # LF2 through Lumeri CLI and a Codex subscription
 
-This unpublished source candidate adds an explicit `luvi lf2` command to Video
-and combined-package candidates. Published packages do not yet include it.
-Package versions and `release-lock.json` still identify the older published
-artifacts; release verification deliberately rejects these changed candidates.
+This unpublished local release candidate adds an explicit `luvi lf2` command
+to Video 1.0.2 and combined CLI 1.0.1. Published packages do not yet include it.
+Those two versions have an approved local `release-lock.json` freeze; passing
+package verification establishes their bytes without claiming publication.
 Lumeri CLI owns the film request,
 its four tools, Project and exported media. The official `codex app-server`
 process supplies the creative model using its existing ChatGPT login. The CLI

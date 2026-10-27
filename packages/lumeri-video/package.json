@@ -1,6 +1,6 @@
 {
   "name": "lumeri-video",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Lumeri Video terminal client for the Lumeri v3 runtime",
   "type": "module",
   "license": "MIT",

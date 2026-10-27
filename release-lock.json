@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "packages": {
     "lumeri-video": {
-      "frozenFrom": "npm:lumeri-video@1.0.1",
+      "frozenFrom": "local:lumeri-video@1.0.2",
       "artifact": {
-        "filename": "lumeri-video-1.0.1.tgz",
-        "sha256": "079531e9ad927c5187ffa29631f5e4db7f50392c456b96dd13c6e257adea79fa",
-        "entryCount": 39
+        "filename": "lumeri-video-1.0.2.tgz",
+        "sha256": "574d35f159c944ce1d6999616648d076904b214e32dbb4bf906d2cd9f4d7d6ef",
+        "entryCount": 45
       },
       "exactToolchain": {
         "node": "22.23.2",
@@ -56,6 +56,12 @@
           "sha256": "554b0d8505ebad76178664462e0aa9ca9621b787a736ffbc38944da3bf2c8bd4"
         },
         {
+          "name": "package/src/lf2/codex-app-server.js",
+          "mode": "0644",
+          "size": 7943,
+          "sha256": "18389b72431e13287789fa5237743263438dfb7463cf949a1bc4a65f1c77071d"
+        },
+        {
           "name": "package/src/contract.js",
           "mode": "0644",
           "size": 744,
@@ -86,6 +92,12 @@
           "sha256": "d9709d9be0b58bb0b62d0b9b43341390eaf3c737d816814a5f9f20badafe8381"
         },
         {
+          "name": "package/src/lf2-cli.js",
+          "mode": "0644",
+          "size": 12478,
+          "sha256": "f2ad1c289317dca3e9230052e2874e68b7f5c18d034e7a8728978457bc09a818"
+        },
+        {
           "name": "package/src/logo.js",
           "mode": "0644",
           "size": 1022,
@@ -94,8 +106,8 @@
         {
           "name": "package/bin/luvi.js",
           "mode": "0755",
-          "size": 84,
-          "sha256": "2a57bfab523b0d16fa461c67a3991b75329f0165ef3d1fa1d385f34c7c631d20"
+          "size": 396,
+          "sha256": "907d757075740076510c26d071a39b5e28ee9e28135aeb1ae8e0af23d24ffdbe"
         },
         {
           "name": "package/src/markdown.js",
@@ -140,6 +152,12 @@
           "sha256": "a5c8408787cae5f13c68e2c9164ac01654e65dbe0485f6e9f290e1488cbb68bb"
         },
         {
+          "name": "package/src/lf2/resources.js",
+          "mode": "0644",
+          "size": 1182,
+          "sha256": "824b4b876c83797e8185c731520d2160bae77c86a2d39a9c01fab2f14f90a3e3"
+        },
+        {
           "name": "package/src/roughcut-cli.js",
           "mode": "0644",
           "size": 4646,
@@ -150,6 +168,12 @@
           "mode": "0644",
           "size": 1159,
           "sha256": "797418354757acba72c6853cf055217db42ef79de36fb32f5657503ff8e43dd8"
+        },
+        {
+          "name": "package/src/lf2/runtime.js",
+          "mode": "0644",
+          "size": 19655,
+          "sha256": "f4fabf8d2b3988e36df99f3e4662b2aef183018c39374fd6564a90c7b5825412"
         },
         {
           "name": "package/src/setup-cli.js",
@@ -238,14 +262,26 @@
         {
           "name": "package/package.json",
           "mode": "0644",
-          "size": 1541,
-          "sha256": "4ed2907122f1bd01c283f999ed9973968d3d9611f700211e74e345adc9dc9f40"
+          "size": 1723,
+          "sha256": "c809888720404452deb637b4764b0205d03586c0c0b7d10e5f55a7fbd8c17577"
+        },
+        {
+          "name": "package/docs/lf2-codex-cli.md",
+          "mode": "0644",
+          "size": 4472,
+          "sha256": "b70ea42b6a2d08a2147239418f26a9c880b1480749f72a205ad40d662d0b771a"
         },
         {
           "name": "package/README.md",
           "mode": "0644",
-          "size": 797,
-          "sha256": "1954397383187bca35aea8f3bb253e6b4b4d02098335dd073af3af6e4e9fd854"
+          "size": 1240,
+          "sha256": "4f257751bf4f0e52aa4e07408addbfcdde0a8a21e521e680513077897fa6f256"
+        },
+        {
+          "name": "package/examples/lf2/vector-city-brief.txt",
+          "mode": "0644",
+          "size": 833,
+          "sha256": "84b68a6ccb1ee4314e0057a8bbe64797b3d9e1690204ad95283f5266715ce950"
         }
       ]
     },
@@ -504,11 +540,11 @@
       ]
     },
     "lumeri-cli": {
-      "frozenFrom": "npm:lumeri-cli@1.0.0",
+      "frozenFrom": "local:lumeri-cli@1.0.1",
       "artifact": {
-        "filename": "lumeri-cli-1.0.0.tgz",
-        "sha256": "dceb7db4255421d7db785d10bcf696119104065b75ec8b199f6f0523ef75d9a9",
-        "entryCount": 41
+        "filename": "lumeri-cli-1.0.1.tgz",
+        "sha256": "194c9efd605108d4b531573adb6f17cd4c4bddff3ab4c818666b0d70c0884793",
+        "entryCount": 47
       },
       "exactToolchain": {
         "node": "26.5.0",
@@ -522,46 +558,16 @@
           "sha256": "b064508a467c6f95408d108ff3425f15c5644facdeebe6fce645b1ad68dab12b"
         },
         {
-          "name": "package/README.md",
+          "name": "package/src/api.js",
           "mode": "0644",
-          "size": 9683,
-          "sha256": "b005ab1e68f6252eb2355733f9587d16104b9243f5c75cef6cb3de43071988bb"
-        },
-        {
-          "name": "package/bin/cli.js",
-          "mode": "0755",
-          "size": 7578,
-          "sha256": "554b0d8505ebad76178664462e0aa9ca9621b787a736ffbc38944da3bf2c8bd4"
-        },
-        {
-          "name": "package/bin/luqu.js",
-          "mode": "0755",
-          "size": 85,
-          "sha256": "629e8428346df1718d9091ad837f67557e426ebc9c5e3345c1fde67663b9eeb4"
-        },
-        {
-          "name": "package/bin/luvi.js",
-          "mode": "0755",
-          "size": 84,
-          "sha256": "2a57bfab523b0d16fa461c67a3991b75329f0165ef3d1fa1d385f34c7c631d20"
-        },
-        {
-          "name": "package/package.json",
-          "mode": "0644",
-          "size": 2535,
-          "sha256": "75bfdcedaaece88ed95382ab309c811e252e7c35303e7bb0cd3be9ebafd29bed"
+          "size": 11324,
+          "sha256": "fbcc45aebe82761e43e5a4bd1a7b7bfaaabd3abb3dda700676b68d30a6a06168"
         },
         {
           "name": "package/src/App.js",
           "mode": "0644",
           "size": 64254,
           "sha256": "6150c5bac164a7c4dbd6bfd9064eddc48af992c43fb99ad30014fcc8a913a3fa"
-        },
-        {
-          "name": "package/src/api.js",
-          "mode": "0644",
-          "size": 11324,
-          "sha256": "fbcc45aebe82761e43e5a4bd1a7b7bfaaabd3abb3dda700676b68d30a6a06168"
         },
         {
           "name": "package/src/ask.js",
@@ -582,58 +588,22 @@
           "sha256": "2fbf8d83ca94ecfb0a53f9d051cebfb4b4a2d1ab3bf2bd65c098face5d004458"
         },
         {
-          "name": "package/src/components/InputBox.js",
-          "mode": "0644",
-          "size": 11171,
-          "sha256": "3fea41748263c9e5717e3bed3a8ddb3a01e7d860189ed84e892691aed62c4b46"
+          "name": "package/bin/cli.js",
+          "mode": "0755",
+          "size": 7578,
+          "sha256": "554b0d8505ebad76178664462e0aa9ca9621b787a736ffbc38944da3bf2c8bd4"
         },
         {
-          "name": "package/src/components/Notice.js",
+          "name": "package/src/lf2/codex-app-server.js",
           "mode": "0644",
-          "size": 2578,
-          "sha256": "bf8f843fbe93ee114a6d57a2f3994bc0189c1a832293e59f019a1918fdd0ea57"
-        },
-        {
-          "name": "package/src/components/Splash.js",
-          "mode": "0644",
-          "size": 2350,
-          "sha256": "223d8b70dc77b620973e9f39d8fcb296b920b592efcc5d0ab4165e04351a560c"
-        },
-        {
-          "name": "package/src/components/StarterSuggestions.js",
-          "mode": "0644",
-          "size": 1775,
-          "sha256": "5b49af291a7273f9623560a1feabef286e7d520da851e8ca7341e2383b72a019"
-        },
-        {
-          "name": "package/src/components/StatusLine.js",
-          "mode": "0644",
-          "size": 2018,
-          "sha256": "fa4f7474b26f49b686529240c9a087906021007013fd57b6753ea4d85ddd1396"
-        },
-        {
-          "name": "package/src/components/ToolCall.js",
-          "mode": "0644",
-          "size": 7128,
-          "sha256": "1370d7f8ee37dc6b5f192af6833cb31c9d4ec04bccacec45e1682bf7e145c1ad"
-        },
-        {
-          "name": "package/src/components/Turn.js",
-          "mode": "0644",
-          "size": 2635,
-          "sha256": "dcc582f03cd824c7753dde9840d1e06cddcc13d41a49396bbe90d9523a6133c5"
+          "size": 7943,
+          "sha256": "18389b72431e13287789fa5237743263438dfb7463cf949a1bc4a65f1c77071d"
         },
         {
           "name": "package/src/contract.js",
           "mode": "0644",
           "size": 744,
           "sha256": "96f08cbbb885a2a0a412700bbc2290827fe2749d7e52b2ce67f1d777ee535610"
-        },
-        {
-          "name": "package/src/contract.json",
-          "mode": "0644",
-          "size": 1173,
-          "sha256": "b0ef54342f80a9ee27752b697b0b56b5fa3cc707ad949e97f6b78dfc8a438112"
         },
         {
           "name": "package/src/format.js",
@@ -654,6 +624,18 @@
           "sha256": "b990076a5e7b7b0f4e89a3e84db7e3714bbeeaa8e3c47a668ac744b959903be9"
         },
         {
+          "name": "package/src/components/InputBox.js",
+          "mode": "0644",
+          "size": 11171,
+          "sha256": "3fea41748263c9e5717e3bed3a8ddb3a01e7d860189ed84e892691aed62c4b46"
+        },
+        {
+          "name": "package/src/lf2-cli.js",
+          "mode": "0644",
+          "size": 12478,
+          "sha256": "f2ad1c289317dca3e9230052e2874e68b7f5c18d034e7a8728978457bc09a818"
+        },
+        {
           "name": "package/src/logo.js",
           "mode": "0644",
           "size": 1022,
@@ -666,10 +648,28 @@
           "sha256": "9862d4f1c4cb0a588ed28d9779287bf13007bd61ce77ff12489589f7edc7160b"
         },
         {
+          "name": "package/bin/luqu.js",
+          "mode": "0755",
+          "size": 85,
+          "sha256": "629e8428346df1718d9091ad837f67557e426ebc9c5e3345c1fde67663b9eeb4"
+        },
+        {
+          "name": "package/bin/luvi.js",
+          "mode": "0755",
+          "size": 396,
+          "sha256": "907d757075740076510c26d071a39b5e28ee9e28135aeb1ae8e0af23d24ffdbe"
+        },
+        {
           "name": "package/src/markdown.js",
           "mode": "0644",
           "size": 5347,
           "sha256": "0da0b4086e80d1f06fd34610a043e461b4926170ffc47a3ec6ad2a391f0b3204"
+        },
+        {
+          "name": "package/src/components/Notice.js",
+          "mode": "0644",
+          "size": 2578,
+          "sha256": "bf8f843fbe93ee114a6d57a2f3994bc0189c1a832293e59f019a1918fdd0ea57"
         },
         {
           "name": "package/src/open.js",
@@ -708,6 +708,12 @@
           "sha256": "303ce8549edb5edd7cb225b88e4f855763395a8e93ce2a79ffcf331594b3bf55"
         },
         {
+          "name": "package/src/lf2/resources.js",
+          "mode": "0644",
+          "size": 1182,
+          "sha256": "824b4b876c83797e8185c731520d2160bae77c86a2d39a9c01fab2f14f90a3e3"
+        },
+        {
           "name": "package/src/roughcut-cli.js",
           "mode": "0644",
           "size": 4646,
@@ -718,6 +724,12 @@
           "mode": "0644",
           "size": 1159,
           "sha256": "797418354757acba72c6853cf055217db42ef79de36fb32f5657503ff8e43dd8"
+        },
+        {
+          "name": "package/src/lf2/runtime.js",
+          "mode": "0644",
+          "size": 19655,
+          "sha256": "f4fabf8d2b3988e36df99f3e4662b2aef183018c39374fd6564a90c7b5825412"
         },
         {
           "name": "package/src/setup-cli.js",
@@ -738,10 +750,28 @@
           "sha256": "6421dd75f18650b3047016dfd4fcd4b9e6ecb9edae8f47f9f02d782e884364c3"
         },
         {
+          "name": "package/src/components/Splash.js",
+          "mode": "0644",
+          "size": 2350,
+          "sha256": "223d8b70dc77b620973e9f39d8fcb296b920b592efcc5d0ab4165e04351a560c"
+        },
+        {
           "name": "package/src/sse.js",
           "mode": "0644",
           "size": 4619,
           "sha256": "bf693f95c3c3b362b37578469d344b74967ec0101fbadfc0023ffa6c18cb0854"
+        },
+        {
+          "name": "package/src/components/StarterSuggestions.js",
+          "mode": "0644",
+          "size": 1775,
+          "sha256": "5b49af291a7273f9623560a1feabef286e7d520da851e8ca7341e2383b72a019"
+        },
+        {
+          "name": "package/src/components/StatusLine.js",
+          "mode": "0644",
+          "size": 2018,
+          "sha256": "fa4f7474b26f49b686529240c9a087906021007013fd57b6753ea4d85ddd1396"
         },
         {
           "name": "package/src/terminal-title.js",
@@ -756,10 +786,52 @@
           "sha256": "b3b069766a0f2de45785ae84469cc056b5ab3c2a667d33370ff4b1facdaf022f"
         },
         {
+          "name": "package/src/components/ToolCall.js",
+          "mode": "0644",
+          "size": 7128,
+          "sha256": "1370d7f8ee37dc6b5f192af6833cb31c9d4ec04bccacec45e1682bf7e145c1ad"
+        },
+        {
           "name": "package/src/trusted-folders.js",
           "mode": "0644",
           "size": 3662,
           "sha256": "d011420f87f5931632382aa488fc5f016bdcadea31184e584b8c982b8004f6c4"
+        },
+        {
+          "name": "package/src/components/Turn.js",
+          "mode": "0644",
+          "size": 2635,
+          "sha256": "dcc582f03cd824c7753dde9840d1e06cddcc13d41a49396bbe90d9523a6133c5"
+        },
+        {
+          "name": "package/src/contract.json",
+          "mode": "0644",
+          "size": 1173,
+          "sha256": "b0ef54342f80a9ee27752b697b0b56b5fa3cc707ad949e97f6b78dfc8a438112"
+        },
+        {
+          "name": "package/package.json",
+          "mode": "0644",
+          "size": 2717,
+          "sha256": "1c8a2d9e7ee6264f58557f0756c4641cabe7c8694e0d39a977442d81c3627dc6"
+        },
+        {
+          "name": "package/docs/lf2-codex-cli.md",
+          "mode": "0644",
+          "size": 4472,
+          "sha256": "b70ea42b6a2d08a2147239418f26a9c880b1480749f72a205ad40d662d0b771a"
+        },
+        {
+          "name": "package/README.md",
+          "mode": "0644",
+          "size": 10229,
+          "sha256": "b0101a7558a7a5801be21bb492e74b1e8a27c2ece368dcef0d06176424689766"
+        },
+        {
+          "name": "package/examples/lf2/vector-city-brief.txt",
+          "mode": "0644",
+          "size": 833,
+          "sha256": "84b68a6ccb1ee4314e0057a8bbe64797b3d9e1690204ad95283f5266715ce950"
         }
       ]
     }

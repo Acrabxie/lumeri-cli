@@ -1,8 +1,8 @@
 # Lumeri Video and Quanta CLI
 
-This source branch prepares an **unpublished local LF2 candidate**. The
-published combined package remains at its frozen version; this candidate keeps
-that label until a new release is chosen and fails published-lock verification.
+This source branch prepares an **unpublished local 1.0.1 LF2 candidate** with
+an approved local release freeze. Package verification checks those candidate
+bytes; the published combined package remains at its previous version.
 It adds `luvi lf2 --help` through an official Codex process and an owned isolated
 source Runtime, currently fixed to an 8s/720p/30fps film. It does not connect to
 a daily App account. See [the LF2 guide](docs/lf2-codex-cli.md). Quanta has no LF2
