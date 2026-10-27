@@ -14,6 +14,11 @@ The model can inspect, author/revise an editable Scene, receive actual LF2 PNG
 previews as images, and export MP4 and ProRes4444 MOV. Every operation uses the
 normal Runtime Luc/Project Gate/Timeline/Job/CAS routes. It is a CLI-driven
 model/tool loop, not a scripted film or an already-rendered video insertion.
+The supplied prompt controls the subject, story and visual direction within
+the trial's fixed format. Built-in filesystem image reads are disabled;
+preview images arrive only through the declared LF2 tool responses. The
+Runtime session has a zero model-spending budget; Codex supplies the model
+through its own ChatGPT subscription.
 
 This first integration is a local trial: it accepts an owned 0600 readiness
 file from an **isolated source Runtime**, and creates a new Project. It refuses

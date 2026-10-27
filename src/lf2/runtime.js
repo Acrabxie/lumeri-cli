@@ -218,7 +218,7 @@ export async function createLf2Runtime({
       if (await request(prefix, undefined, { missingOk: true })) throw new Error("Refusing pre-existing session");
       const project = await request("/projects", { name: "LF2 CLI film", project_id: projectId });
       await request("/sessions", { project_id: projectId, session_id: sessionId,
-        expected_project_revision: project.revision, budget_limit_usd: .25 });
+        expected_project_revision: project.revision, budget_limit_usd: 0 });
       const current = await timeline();
       const revision = current.project_revision;
       const formatted = await request(prefix + "/timeline/patch", {

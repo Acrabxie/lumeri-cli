@@ -49,6 +49,7 @@ test('official app-server dynamic call stays in declared thread and disables unr
     const start = fake.requests.find(x => x.method === 'thread/start').params;
     assert.equal(start.config.mcp_servers.unrelated.enabled, false);
     assert.equal(start.config.features.shell_tool, false); assert.equal(start.sandbox, 'read-only');
+    assert.equal(start.config.features.view_image_tool, false, 'filesystem image reads remain disabled while dynamic tool images work');
     assert.equal(start.ephemeral, true); assert.equal(start.allowProviderModelFallback, false);
     assert.doesNotMatch(JSON.stringify(events), /private@example|do-not-log/);
   } finally { await session.close(); }
@@ -69,6 +70,7 @@ test('API-key auth and incomplete turns fail instead of claiming subscription su
 test('CLI orchestrates model-triggered save/preview/both exports, sends images and records no base64', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'lf2-cli-'));
   const operations = []; let modelTool, closed = false;
+  const prompt = 'A silent abstract vector film showing a folded ribbon becoming a flower; use blue and white.';
   const runtime = {
     initialize: async () => operations.push('initialize'), inspect: async () => ({ project_revision: 0 }),
     saveScene: async ({ html }) => { assert.match(html, /render/); return { scene_revision: 1 }; },
@@ -76,12 +78,18 @@ test('CLI orchestrates model-triggered save/preview/both exports, sends images a
     exportVideo: async ({ format }) => ({ path: join(dir, 'film.' + format), bytes: 100, jobId: 'job_' + format }),
   };
   try {
-    const result = await createLf2Film({ prompt: 'Original dot-orbit-city', outputDir: dir, readyFile: '/tmp/ready', sourceRoot: '/tmp/runtime', codexBin: 'codex' }, {
+    const result = await createLf2Film({ prompt, outputDir: dir, readyFile: '/tmp/ready', sourceRoot: '/tmp/runtime', codexBin: 'codex' }, {
       runtimeFactory: async () => runtime, checkResources: async () => {},
-      sessionFactory: () => ({ start: async options => { modelTool = options.onTool; return { authentication: 'chatgpt' }; },
-        run: async () => { await modelTool('lf2_scene_save', { html: 'function render() {}' }); const preview = await modelTool('lf2_preview', { frameIndices: [120] }); assert.equal(preview[1].type, 'inputImage'); await modelTool('lf2_export', { format: 'mp4' }); await modelTool('lf2_export', { format: 'mov' }); return { id: 'turn_cli' }; }, close: async () => { closed = true; } }),
+      sessionFactory: () => ({ start: async options => {
+        modelTool = options.onTool;
+        assert.doesNotMatch(options.developerInstructions, /Acrab|orbital|small city|paper\/teal\/coral\/ochre|independently from the request/);
+        assert.match(options.developerInstructions, /creator's request/);
+        return { authentication: 'chatgpt' };
+      },
+        run: async request => { assert.equal(request, prompt); await modelTool('lf2_scene_save', { html: 'function render() {}' }); const preview = await modelTool('lf2_preview', { frameIndices: [120] }); assert.equal(preview[1].type, 'inputImage'); await modelTool('lf2_export', { format: 'mp4' }); await modelTool('lf2_export', { format: 'mov' }); return { id: 'turn_cli' }; }, close: async () => { closed = true; } }),
     });
     assert.equal(result.status, 'completed'); assert.deepEqual(operations, ['initialize']); assert.equal(closed, true);
+    assert.equal(result.prompt, prompt);
     const report = await readFile(join(dir, 'cli-run.json'), 'utf8'); assert.doesNotMatch(report, /PRIVATE_IMAGE|data:image/);
     await assert.rejects(createLf2Film({ prompt: 'x', outputDir: dir }), /Output already/);
   } finally { await rm(dir, { recursive: true }); }
@@ -128,7 +136,7 @@ test('CLI continuation passes original Project/revision/source to Runtime, previ
     await writeFile(scenePath,JSON.stringify(scene),{mode:0o600});await writeFile(reportFile,JSON.stringify(record),{mode:0o600});
     const result=await createLf2Film({resumeRun:reportFile,outputDir:dir,readyFile:'/tmp/ready',sourceRoot:'/tmp/source',codexBin:'codex'}, {
       checkResources:async()=>{},runtimeFactory:async options=>{assert.equal(options.projectId,record.tools[0].result.projectId);assert.equal(options.resume.projectRevision,3);assert.deepEqual(options.resume.scene,scene);return {initialize:async()=>{},inspect:async()=>({sceneRevision:0}),previewFrames:async()=>({images:[],frames:[{frameIndex:239}]}),saveScene:async()=>{throw new Error('unneeded generation');},exportVideo:async({format})=>({path:join(dir,'film.'+format)})};},
-      sessionFactory:()=>({start:async options=>{onTool=options.onTool;assert.match(options.developerInstructions,/explicit continuation/);return {authentication:'chatgpt'};},run:async prompt=>{assert.match(prompt,/already|previous run/);await onTool('lf2_preview',{frameIndices:[239]});await onTool('lf2_export',{format:'mp4'});await onTool('lf2_export',{format:'mov'});return {id:'turn_resume'};},close:async()=>{}})
+      sessionFactory:()=>({start:async options=>{onTool=options.onTool;assert.match(options.developerInstructions,/explicit continuation/);assert.doesNotMatch(options.developerInstructions,/Acrab|orbital|small city/);return {authentication:'chatgpt'};},run:async prompt=>{assert.match(prompt,/already|previous run/);assert.doesNotMatch(prompt,/Acrab/);await onTool('lf2_preview',{frameIndices:[239]});await onTool('lf2_export',{format:'mp4'});await onTool('lf2_export',{format:'mov'});return {id:'turn_resume'};},close:async()=>{}})
     });
     assert.equal(result.resumedFrom.projectRevision,3);assert.equal(result.resumedFrom.reportPath,reportFile);assert.equal(result.tools.some(t=>t.name==='lf2_scene_save'),false);
   }finally{await rm(dir,{recursive:true});}

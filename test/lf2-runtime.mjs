@@ -51,6 +51,7 @@ async function fixture(t, overrides = {}) {
       if (request.url === `${prefix}/sessions`) {
         assert.equal(body.expected_project_revision, state.revision);
         assert.equal(body.project_id, projectId); assert.equal(body.session_id, sessionId);
+        assert.equal(body.budget_limit_usd, 0, "subscription film tools must not enable Runtime model spending");
         state.session = true;
         return json(201, { project_id: projectId, session_id: sessionId });
       }

@@ -79,7 +79,7 @@ export class CodexLf2Session {
     this.onEvent({ type: 'subscription', authentication: account.type });
     const effective = await this.request('config/read', { includeLayers: false });
     const config = {
-      features: { shell_tool: false, apply_patch_freeform: false, unified_exec: false, apps: false, collab: false, multi_agent: false, browser_use: false, computer_use: false, image_generation: false, web_search: false, memories: false, memory_tool: false, skill_search: false },
+      features: { shell_tool: false, apply_patch_freeform: false, unified_exec: false, view_image_tool: false, apps: false, collab: false, multi_agent: false, browser_use: false, computer_use: false, image_generation: false, web_search: false, memories: false, memory_tool: false, skill_search: false },
       web_search: 'disabled', mcp_servers: {},
     };
     // Disabling each configured server also works with clients that merge empty tables.
