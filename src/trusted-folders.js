@@ -3,7 +3,8 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import readline from "node:readline";
 
-export function trustedFoldersConfigPath(home = homedir()) {
+export function trustedFoldersConfigPath(home = homedir(), env = process.env) {
+  if (env?.LUMERI_LOCAL_CONFIG_PATH) return resolve(env.LUMERI_LOCAL_CONFIG_PATH);
   return resolve(home, ".lumeri", "config.toml");
 }
 
@@ -20,8 +21,8 @@ function parseTrustedFolders(text) {
   }
 }
 
-export function getTrustedFolders({ home = homedir() } = {}) {
-  try { return parseTrustedFolders(readFileSync(trustedFoldersConfigPath(home), "utf8")); }
+export function getTrustedFolders({ home = homedir(), env = process.env } = {}) {
+  try { return parseTrustedFolders(readFileSync(trustedFoldersConfigPath(home, env), "utf8")); }
   catch { return []; }
 }
 
@@ -54,9 +55,9 @@ export function isTrustedFolder(folder, options = {}) {
   return resolveTrustedFolder(folder, options) !== null;
 }
 
-export function trustFolder(folder, { home = homedir() } = {}) {
+export function trustFolder(folder, { home = homedir(), env = process.env } = {}) {
   const target = canonicalFolderPath(folder);
-  const config = trustedFoldersConfigPath(home);
+  const config = trustedFoldersConfigPath(home, env);
   let text = "";
   try { text = readFileSync(config, "utf8"); } catch { /* first run */ }
   const folders = [...new Set([...parseTrustedFolders(text), target])];
@@ -85,10 +86,10 @@ export function trustFolder(folder, { home = homedir() } = {}) {
 }
 
 export async function requestFolderTrust({
-  folder = process.cwd(), input = process.stdin, output = process.stdout, home = homedir(),
+  folder = process.cwd(), input = process.stdin, output = process.stdout, home = homedir(), env = process.env,
 } = {}) {
   const target = canonicalFolderPath(folder);
-  if (isTrustedFolder(target, { home })) return { folder: target, trusted: true, changed: false };
+  if (isTrustedFolder(target, { home, env })) return { folder: target, trusted: true, changed: false };
   if (!input.isTTY || !output.isTTY) return { folder: target, trusted: false, changed: false };
   const rl = readline.createInterface({ input, output });
   const answer = await new Promise((resolveAnswer) => rl.question(
@@ -103,6 +104,6 @@ export async function requestFolderTrust({
   // placeholder instead of reaching the composer. Hand input back explicitly.
   input.resume();
   if (!/^(y|yes)$/i.test(String(answer).trim())) return { folder: target, trusted: false, changed: false };
-  trustFolder(target, { home });
+  trustFolder(target, { home, env });
   return { folder: target, trusted: true, changed: true };
 }

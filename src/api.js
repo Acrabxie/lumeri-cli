@@ -56,7 +56,12 @@ function ok(res, ...accept) {
 
 export async function health(baseUrl) {
   const res = await request(baseUrl, "/health", { timeoutMs: 4000 });
-  return res.status === 200;
+  if (res.status === 200) return true;
+  if (res.status === 404) {
+    const v1 = await request(baseUrl, "/runtime/v1/health", { timeoutMs: 4000 });
+    return v1.status === 200;
+  }
+  return false;
 }
 
 export async function createSession(baseUrl, { projectId } = {}) {

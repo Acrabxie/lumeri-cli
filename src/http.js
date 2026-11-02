@@ -6,6 +6,7 @@ import http from "node:http";
 import https from "node:https";
 import { URL } from "node:url";
 import { currentProduct } from "./product.js";
+import { configuredCliLease } from "./runtime-config.js";
 
 export const DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
@@ -13,12 +14,23 @@ function lib(u) {
   return u.protocol === "https:" ? https : http;
 }
 
-function productHeaders(headers = {}, accept) {
+function productHeaders(headers = {}, accept, targetUrl = null) {
   const merged = { Accept: accept, ...headers };
-  const hasProduct = Object.keys(merged).some(
-    (name) => name.toLowerCase() === "x-lumeri-product",
-  );
-  if (!hasProduct) merged["X-Lumeri-Product"] = currentProduct();
+  const lowerNames = new Set(Object.keys(merged).map((name) => name.toLowerCase()));
+  if (!lowerNames.has("x-lumeri-product")) {
+    merged["X-Lumeri-Product"] = currentProduct();
+  }
+  if (targetUrl) {
+    const lease = configuredCliLease();
+    if (lease && targetUrl.origin === lease.origin) {
+      if (!lowerNames.has("cookie")) {
+        merged.Cookie = `${lease.cookieName}=${lease.frontendSession}`;
+      }
+      if (!lowerNames.has("origin")) {
+        merged.Origin = lease.origin;
+      }
+    }
+  }
   return merged;
 }
 
@@ -57,7 +69,7 @@ export function request(baseUrl, path, opts = {}) {
   const u = new URL(path, baseUrl);
 
   let payload = body;
-  const hdrs = productHeaders(headers, "application/json");
+  const hdrs = productHeaders(headers, "application/json", u);
   if (json !== undefined) {
     payload = Buffer.from(JSON.stringify(json), "utf8");
     hdrs["Content-Type"] = "application/json; charset=utf-8";
@@ -155,7 +167,7 @@ export function openStream(baseUrl, path, { headers = {}, onRequest, timeoutMs =
     };
     const req = lib(u).request(
       u,
-      { method: "GET", headers: productHeaders(headers, "text/event-stream") },
+      { method: "GET", headers: productHeaders(headers, "text/event-stream", u) },
       (res) => {
         clearHeaderTimer();
         resolve({ res, req });

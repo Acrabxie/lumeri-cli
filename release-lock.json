@@ -5,7 +5,7 @@
       "frozenFrom": "local:lumeri-video@1.0.2",
       "artifact": {
         "filename": "lumeri-video-1.0.2.tgz",
-        "sha256": "574d35f159c944ce1d6999616648d076904b214e32dbb4bf906d2cd9f4d7d6ef",
+        "sha256": "d66217e104c32b38b544063d8ccb9526525b156c0e544b3e4eaf4add8c1a12d2",
         "entryCount": 45
       },
       "exactToolchain": {
@@ -22,8 +22,8 @@
         {
           "name": "package/src/api.js",
           "mode": "0644",
-          "size": 12407,
-          "sha256": "a9cf4ba86a1af459b33e33071f6d757396cd0003d0538708d56d1d908c39db85"
+          "size": 12577,
+          "sha256": "bd75a8abc9177164ab86e5c630c03211b812ef4407da94c9c6aa3280687d376f"
         },
         {
           "name": "package/src/App.js",
@@ -82,8 +82,8 @@
         {
           "name": "package/src/http.js",
           "mode": "0644",
-          "size": 5471,
-          "sha256": "fc2d8171b5ff498fb6afeb520e52a47dc2c0d96cfcb0d639a3a4302ecab4575b"
+          "size": 5890,
+          "sha256": "a47a34d31c76fecda49141bfae492729dc7c6dd8809ca362c1bfaccf95b970c1"
         },
         {
           "name": "package/src/components/InputBox.js",
@@ -166,8 +166,8 @@
         {
           "name": "package/src/runtime-config.js",
           "mode": "0644",
-          "size": 1159,
-          "sha256": "797418354757acba72c6853cf055217db42ef79de36fb32f5657503ff8e43dd8"
+          "size": 3622,
+          "sha256": "bac221ed0e66b4a415c3d4fe2bc2ae46b7c6ccf3d83a5dc9a7a5e3b5f9f3a3fe"
         },
         {
           "name": "package/src/lf2/runtime.js",
@@ -244,8 +244,8 @@
         {
           "name": "package/src/trusted-folders.js",
           "mode": "0644",
-          "size": 4423,
-          "sha256": "6ae7d92cf769ac136abef277401d2727c39453e919a66663c4293dd186922f33"
+          "size": 4602,
+          "sha256": "92c54e34f8562beb9dbc44d1481f9865362b4811dfd3794356195953de548fdb"
         },
         {
           "name": "package/src/components/Turn.js",
@@ -289,7 +289,7 @@
       "frozenFrom": "npm:lumeri-quanta@1.0.1",
       "artifact": {
         "filename": "lumeri-quanta-1.0.1.tgz",
-        "sha256": "37bbbc58ab299fa0e9d58ac2b0056f4185fc3e413a9bea27b095d17a7d6dd9ac",
+        "sha256": "9393bc49991872f0b5c561ca6335ad1b4d1af1f3337aeaa684d14b0f0e28a588",
         "entryCount": 40
       },
       "exactToolchain": {
@@ -306,8 +306,8 @@
         {
           "name": "package/src/api.js",
           "mode": "0644",
-          "size": 12407,
-          "sha256": "a9cf4ba86a1af459b33e33071f6d757396cd0003d0538708d56d1d908c39db85"
+          "size": 12577,
+          "sha256": "bd75a8abc9177164ab86e5c630c03211b812ef4407da94c9c6aa3280687d376f"
         },
         {
           "name": "package/src/App.js",
@@ -360,8 +360,8 @@
         {
           "name": "package/src/http.js",
           "mode": "0644",
-          "size": 5471,
-          "sha256": "fc2d8171b5ff498fb6afeb520e52a47dc2c0d96cfcb0d639a3a4302ecab4575b"
+          "size": 5890,
+          "sha256": "a47a34d31c76fecda49141bfae492729dc7c6dd8809ca362c1bfaccf95b970c1"
         },
         {
           "name": "package/src/components/InputBox.js",
@@ -438,8 +438,8 @@
         {
           "name": "package/src/runtime-config.js",
           "mode": "0644",
-          "size": 1159,
-          "sha256": "797418354757acba72c6853cf055217db42ef79de36fb32f5657503ff8e43dd8"
+          "size": 3622,
+          "sha256": "bac221ed0e66b4a415c3d4fe2bc2ae46b7c6ccf3d83a5dc9a7a5e3b5f9f3a3fe"
         },
         {
           "name": "package/src/setup-cli.js",
@@ -510,8 +510,8 @@
         {
           "name": "package/src/trusted-folders.js",
           "mode": "0644",
-          "size": 4423,
-          "sha256": "6ae7d92cf769ac136abef277401d2727c39453e919a66663c4293dd186922f33"
+          "size": 4602,
+          "sha256": "92c54e34f8562beb9dbc44d1481f9865362b4811dfd3794356195953de548fdb"
         },
         {
           "name": "package/src/components/Turn.js",
@@ -722,8 +722,8 @@
         {
           "name": "package/src/runtime-config.js",
           "mode": "0644",
-          "size": 1159,
-          "sha256": "797418354757acba72c6853cf055217db42ef79de36fb32f5657503ff8e43dd8"
+          "size": 3622,
+          "sha256": "bac221ed0e66b4a415c3d4fe2bc2ae46b7c6ccf3d83a5dc9a7a5e3b5f9f3a3fe"
         },
         {
           "name": "package/src/lf2/runtime.js",

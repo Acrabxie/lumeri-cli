@@ -101,4 +101,83 @@ assert.ok(removed.stderr.includes("unknown argument: codex"));
 assert.equal(requestOrder.length, beforeRemoved, "removed credential command must fail before HTTP");
 
 await new Promise((resolve) => server.close(resolve));
+
+// 1.1 Gateway mode: /health is 404, /runtime/v1/health is 200, and routes
+// require the frontend lease cookie + Origin from cli-session.json.
+{
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const leaseDir = mkdtempSync(join(tmpdir(), "luvi-lease-11-"));
+  const leaseToken = "b".repeat(48);
+  let v1Stream = null;
+  let v1Closed = false;
+  const seenAuth = [];
+  const v1Server = http.createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/runtime/v1/health") {
+      return json(res, 200, { ok: true, service: "gateway" });
+    }
+    const cookie = req.headers.cookie || "";
+    const origin = req.headers.origin || "";
+    seenAuth.push({ url: req.url, cookie, origin });
+    if (!cookie.includes(`lumeri_frontend_video=${leaseToken}`) || !origin.startsWith("http://127.0.0.1:")) {
+      return json(res, 401, { error: "missing lease" });
+    }
+    if (req.method === "POST" && req.url === "/sessions") {
+      return json(res, 201, { session_id: "v11-prompt" });
+    }
+    if (req.method === "GET" && req.url === "/sessions/v11-prompt/stream") {
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      res.flushHeaders();
+      v1Stream = res;
+      return;
+    }
+    if (req.method === "POST" && req.url === "/sessions/v11-prompt/turn") {
+      json(res, 202, { accepted: true });
+      v1Stream.write(`id: 1\ndata: ${JSON.stringify({ kind: "turn_start" })}\n\n`);
+      v1Stream.write(`id: 2\ndata: ${JSON.stringify({ kind: "model_text_delta", delta: "1.1 Gateway turn ok." })}\n\n`);
+      v1Stream.write(`id: 3\ndata: ${JSON.stringify({ kind: "turn_complete", final_asset_ids: [] })}\n\n`);
+      return;
+    }
+    if (req.method === "POST" && req.url === "/sessions/v11-prompt/close") {
+      v1Closed = true;
+      return json(res, 200, { closed: true });
+    }
+    return json(res, 404, {});
+  });
+  await new Promise((resolve) => v1Server.listen(0, "127.0.0.1", resolve));
+  const v1Base = `http://127.0.0.1:${v1Server.address().port}`;
+  try {
+    writeFileSync(
+      join(leaseDir, "cli-session.json"),
+      JSON.stringify({
+        version: 1,
+        origin: v1Base,
+        cookie_name: "lumeri_frontend_video",
+        frontend_session: leaseToken,
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        owner_pid: process.pid,
+      }),
+    );
+    const v1Result = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [bin, "-p", "run 1.1 turn"], {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, LUMERI_NO_BROWSER: "1", LUMERI_CLI_LEASE_DIR: leaseDir },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk));
+      child.stderr.on("data", (chunk) => (stderr += chunk));
+      child.on("close", (code) => resolve({ code, stdout, stderr }));
+    });
+    assert.equal(v1Result.code, 0, `1.1 turn failed: ${v1Result.stderr}`);
+    assert.equal(v1Result.stdout, "1.1 Gateway turn ok.\n");
+    assert.ok(v1Closed, "1.1 session closed after completion");
+    assert.ok(seenAuth.length >= 4, "lease cookie attached across session/stream/turn/close");
+  } finally {
+    await new Promise((resolve) => v1Server.close(resolve));
+    rmSync(leaseDir, { recursive: true, force: true });
+  }
+}
+
 console.log("prompt.mjs: luvi -p uses the full sidecar Agent path; codex chat is removed");

@@ -58,6 +58,27 @@ function close(server) {
   console.log("ok  reachable backend -> health-only readiness");
 }
 
+// 2b) 1.1 Gateway (/health -> 404, /runtime/v1/health -> 200) -> exit 0.
+{
+  const paths = [];
+  const server = http.createServer((req, res) => {
+    paths.push(req.url);
+    if (req.url === "/runtime/v1/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ ok: true, service: "gateway" }));
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  const port = await listen(server);
+  const { code, out } = await capture(() => run(["-s", `http://127.0.0.1:${port}`]));
+  await close(server);
+  assert.equal(code, 0, "reachable 1.1 gateway -> exit 0");
+  assert.ok(out.includes("Backend ready"), 'prints "Backend ready" on 1.1 gateway');
+  assert.deepEqual(paths, ["/health", "/runtime/v1/health"]);
+  console.log("ok  reachable 1.1 gateway -> /runtime/v1/health readiness");
+}
+
 // 3) Backend NOT reachable -> exit 1, prints the guidance.
 {
   // Grab a port then free it so the connection is refused.
