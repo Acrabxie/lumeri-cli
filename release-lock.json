@@ -543,8 +543,8 @@
       "frozenFrom": "local:lumeri-cli@1.0.1",
       "artifact": {
         "filename": "lumeri-cli-1.0.1.tgz",
-        "sha256": "194c9efd605108d4b531573adb6f17cd4c4bddff3ab4c818666b0d70c0884793",
-        "entryCount": 47
+        "entryCount": 47,
+        "sha256": "5dcc353f17f47f81d03d4a94ec59a593c8874d15124ee82c8789187517c70f46"
       },
       "exactToolchain": {
         "node": "26.5.0",
