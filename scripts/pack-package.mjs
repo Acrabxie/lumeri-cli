@@ -308,7 +308,7 @@ export async function packPackage(packageId, options = {}) {
       if (options.requireExact && !exactVerified) {
         const npm = await npmVersion();
         fail(
-          `${packageId}: tgz SHA-256 mismatch under Node ${process.versions.node} / npm ${npm}; ` +
+          `${packageId}: tgz SHA-256 ${digest} does not match frozen ${frozen.artifact.sha256} under Node ${process.versions.node} / npm ${npm}; ` +
           `exact frozen toolchain is Node ${frozen.exactToolchain.node} / npm ${frozen.exactToolchain.npm}`,
         );
       }
