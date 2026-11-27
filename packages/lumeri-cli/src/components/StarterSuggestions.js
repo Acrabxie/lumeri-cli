@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 import { html } from "../html.js";
 import { color } from "../theme.js";
 
-// The four built-in defaults mirror gemia/starter_recommendations.py
+// The four built-in defaults mirror lumeri/starter_recommendations.py
 // DEFAULT_SUGGESTIONS, so the empty composer is useful immediately — even
 // before the backend route answers, or against an older backend that lacks
 // /starter-recommendations. When the backend returns a personalized,

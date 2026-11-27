@@ -1,5 +1,5 @@
 // Drift test: the CLI must handle every event kind the backend contract
-// declares (gemia/v3_contract.py → vendored src/contract.json). Pure source
+// declares (lumeri/v3_contract.py → vendored src/contract.json). Pure source
 // extraction — no App render needed. Red cases:
 //  - contract declares a kind App.js has no `case "..."` for (silent-drop bug
 //    territory; the default banner is only for UNdeclared kinds);

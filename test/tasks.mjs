@@ -1,4 +1,4 @@
-// Regression test for the background shell task chain (parity with gemia
+// Regression test for the background shell task chain (parity with lumeri
 // run_in_background run_shell + web static/v3/v3.js):
 //   - a background_task_update renders without an "unknown event" banner;
 //   - a running job shows the status-line `tasks ×N` chip;

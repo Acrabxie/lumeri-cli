@@ -1,4 +1,4 @@
-// Regression test for plan mode (parity with gemia plan_mode.py + web v3):
+// Regression test for plan mode (parity with lumeri plan_mode.py + web v3):
 // /plan toggles via POST /sessions/{id}/plan_mode and shows the status chip;
 // plan_gate renders as a gate banner (no "unknown event"); turn_complete while
 // planning offers the approval hint; /plan approve turns plan mode off and

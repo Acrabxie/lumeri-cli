@@ -269,10 +269,10 @@ export function App({
     }
   };
 
-  // ── SSE event handling (mirrors gemia static/v3/v3.js handlers) ───────
+  // ── SSE event handling (mirrors lumeri static/v3/v3.js handlers) ───────
   // Resolve the child tool-call state a tool_exec_* event with an agent_id
   // belongs to. Child tool activity rides the EXISTING tool_exec_* kinds
-  // (gemia/subtasks.py) carrying { call_id: <spawn call>, agent_id, tool_call_id }.
+  // (lumeri/subtasks.py) carrying { call_id: <spawn call>, agent_id, tool_call_id }.
   const childCall = (ev) => {
     const spawn = m.current?.callsById.get(ev.call_id);
     const child = spawn?.children?.get(ev.agent_id);
@@ -357,7 +357,7 @@ export function App({
           // The backend may attach `activity_text`: a model-authored,
           // user-facing line describing this action in plain language
           // ("正在把开场节奏剪得更利落"). Web hides the raw verb/args in favor
-          // of it (gemia 2026-07-15 human-readable activity); the CLI does the
+          // of it (lumeri 2026-07-15 human-readable activity); the CLI does the
           // same in ToolCall.js. Absent → fall back to the friendly tool label.
           if (typeof ev.activity_text === "string" && ev.activity_text.trim()) {
             call.activityText = ev.activity_text.trim();
@@ -471,7 +471,7 @@ export function App({
         // A run_in_background run_shell job changed status. These arrive both
         // mid-turn and between turns (the server watcher runs on the session
         // loop), so they live on m.backgroundTasks, not the current turn.
-        // Mirrors gemia static/v3/v3.js background_task_update handler.
+        // Mirrors lumeri static/v3/v3.js background_task_update handler.
         if (ev.job_id) {
           const prev = m.backgroundTasks.get(ev.job_id) || {};
           const status = ev.status || prev.status || "running";
@@ -687,7 +687,7 @@ export function App({
       case "ask_question": {
         // The agent paused on an `elicit` call: stash the question and flip the
         // input into ANSWER mode. (Web is display-only here — the CLI is the
-        // answering client; see gemia docs/protocol-parity-plan.md.)
+        // answering client; see lumeri docs/protocol-parity-plan.md.)
         const pending = toPendingAsk(ev.question);
         if (pending) {
           m.pendingAsk = pending;
@@ -959,7 +959,7 @@ export function App({
     }
   };
 
-  // Toggle the host sandbox (gemia /settings/sandbox), the terminal parity of
+  // Toggle the host sandbox (lumeri /settings/sandbox), the terminal parity of
   // the web Plus-menu / Settings→Safety switch. Global, no session needed.
   //   /sandbox            → show current state
   //   /sandbox on         → protected (sandbox_disabled=false)

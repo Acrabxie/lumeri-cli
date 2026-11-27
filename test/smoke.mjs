@@ -120,7 +120,7 @@ const must = [
   ["connected notice", "connected · session v3-t"],
   ["user echo", "grade it warm"],
   // c1 carries activity_text → the header shows the model's plain-language line
-  // instead of the raw verb (web parity, gemia 2026-07-15). c2 has none → it
+  // instead of the raw verb (web parity, lumeri 2026-07-15). c2 has none → it
   // shows the friendly tool label ("Generate video"), proving the fallback.
   ["tool activity_text header", "正在把画面调成暖色调"],
   ["tool label fallback", "Generate video"],

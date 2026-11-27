@@ -1,4 +1,4 @@
-// Typed wrappers over the Lumeri v3 HTTP surface (see gemia/v3_routes.py).
+// Typed wrappers over the Lumeri v3 HTTP surface (see lumeri/v3_routes.py).
 //   POST   /sessions                       -> create (optionally inside a Project)
 //   GET    /sessions/{id}                  -> info (assets, latest_event_id)
 //   POST   /sessions/{id}/resume           -> resume a durable Project session
@@ -108,7 +108,7 @@ export async function generateSessionTitle(baseUrl, sessionId, messages) {
   }
 }
 
-// Memory-aware starter suggestions for the empty composer (gemia
+// Memory-aware starter suggestions for the empty composer (lumeri
 // starter_recommendations.py → GET /starter-recommendations). Returns
 //   { status: "generating"|"ready"|"retry", personalized: bool,
 //     suggestions: [{label, prompt}] }
@@ -175,7 +175,7 @@ export async function getRoughcutJob(baseUrl, jobId) {
 // session loop. Mirrors the web client (static/v3/v3.js showAskModal submit):
 //   POST /sessions/{id}/ask_response  { question_id, answers }
 // where `answers` is an OBJECT keyed by control key -> the user's value. The
-// server (gemia/v3_routes.py _ask_response) requires both and 404s an unknown
+// server (lumeri/v3_routes.py _ask_response) requires both and 404s an unknown
 // question_id. Accept 200/202/204 — the route returns 200 on success.
 export async function submitAskResponse(baseUrl, sessionId, questionId, answers) {
   const res = await request(baseUrl, `/sessions/${sessionId}/ask_response`, {
@@ -185,7 +185,7 @@ export async function submitAskResponse(baseUrl, sessionId, questionId, answers)
   return ok(res, 200, 202, 204);
 }
 
-// Toggle the session's plan mode (gemia/v3_routes.py _set_plan_mode). The
+// Toggle the session's plan mode (lumeri/v3_routes.py _set_plan_mode). The
 // backend also broadcasts a `plan_mode_changed` SSE event to every client.
 export async function setPlanMode(baseUrl, sessionId, enabled) {
   const res = await request(baseUrl, `/sessions/${sessionId}/plan_mode`, {
@@ -195,7 +195,7 @@ export async function setPlanMode(baseUrl, sessionId, enabled) {
   return ok(res, 200);
 }
 
-// Host sandbox toggle (gemia server /settings/sandbox). A process-global
+// Host sandbox toggle (lumeri server /settings/sandbox). A process-global
 // setting (not per-session), no SSE event. `sandbox_disabled: true` means the
 // two-tier sandbox-exec boundary is OFF — Lumeri's run_shell/host tools get
 // full filesystem access (used for GPU/Blender work); false means protected.
@@ -223,7 +223,7 @@ export async function getQuanta(baseUrl, sessionId) {
   return ok(res, 200);
 }
 
-// Background shell task chain (gemia run_in_background run_shell). listTasks
+// Background shell task chain (lumeri run_in_background run_shell). listTasks
 // returns the authoritative snapshot the SSE ring can't (used by /tasks and
 // resyncAfterGap); killTask maps to POST .../tasks/{job_id}/kill.
 export async function listTasks(baseUrl, sessionId) {
