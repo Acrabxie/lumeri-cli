@@ -72,7 +72,7 @@ export function truncate(s, max = 200) {
 // Deliberately no emoji: emoji cell widths vary by terminal and Unicode
 // version, which shears the ⎿ alignment column, and the verb reads fine alone.
 //
-// Kept in sync with the backend dispatch table (lumeri/tools/__init__.py _REAL).
+// Kept in sync with the backend dispatch table (gemia/tools/__init__.py _REAL).
 // The lumen_* time verbs were renamed with a `lumen_` prefix on the backend;
 // the old bare aliases (set_lane/reverse/…) are kept here too so an older
 // backend build still labels cleanly.
@@ -221,10 +221,10 @@ export function toolLabel(name) {
   return TOOL_LABELS[name] || name;
 }
 
-// One /timeline line per clip. The transition tail renders lumeri_script's
+// One /timeline line per clip. The transition tail renders lumerai's
 // clip.transition (payload key for transition_after) so a dissolve the model
 // added is actually visible in the CLI; export still hard-cuts until xfade
-// lands (lumeri docs/timeline-canonical-plan.md), hence the parenthetical.
+// lands (gemia docs/timeline-canonical-plan.md), hence the parenthetical.
 export function formatClipLine(clip) {
   const start = Number(clip.start || 0).toFixed(2);
   const dur = Number(clip.duration || 0).toFixed(2);

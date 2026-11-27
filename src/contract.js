@@ -1,5 +1,5 @@
-// Vendored copy of the backend's protocol contract (lumeri/v3_contract.py,
-// exported by lumeri scripts/export_contract.py). test/contract.mjs asserts
+// Vendored copy of the backend's protocol contract (gemia/v3_contract.py,
+// exported by gemia scripts/export_contract.py). test/contract.mjs asserts
 // App.js handles every event kind declared here; the backend's
 // tests/test_v3_contract.py asserts this copy is fresh when both repos are
 // present. Do not edit contract.json by hand — re-run the exporter.

@@ -1,6 +1,6 @@
 // Pure helpers for the interactive ask mechanism (elicit) — no React, no IO.
 //
-// Mirrors the web client (lumeri static/v3/v3.js showAskModal / buildAskControl):
+// Mirrors the web client (gemia static/v3/v3.js showAskModal / buildAskControl):
 // the agent pauses on an `elicit` tool call and emits an `ask_question` event
 //   { kind:"ask_question", question:{ question_id, title, description,
 //                                     controls:{ <key>:{type,...} } } }

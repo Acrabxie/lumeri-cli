@@ -1,6 +1,6 @@
 // SSE client for /sessions/{id}/stream.
 //
-// Frames are `id: <n>\ndata: <json>\n\n` (see lumeri/transport/sse.py). We track
+// Frames are `id: <n>\ndata: <json>\n\n` (see gemia/transport/sse.py). We track
 // the last event id and resume with the `Last-Event-ID` header on reconnect so
 // the server replays everything missed (or emits a synthetic `replay_gap`).
 
