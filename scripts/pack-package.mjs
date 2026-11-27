@@ -304,11 +304,13 @@ export async function packPackage(packageId, options = {}) {
       if (!frozen) fail(`${packageId}: missing release-lock entry`);
       compareEntries(entries, frozen.entries, packageId);
       payloadVerified = true;
-      exactVerified = digest === frozen.artifact.sha256;
+      const npm = await npmVersion();
+      const onExactToolchain =
+        process.versions.node === frozen.exactToolchain.node && npm === frozen.exactToolchain.npm;
+      exactVerified = onExactToolchain && digest === frozen.artifact.sha256;
       if (options.requireExact && !exactVerified) {
-        const npm = await npmVersion();
         fail(
-          `${packageId}: tgz SHA-256 mismatch under Node ${process.versions.node} / npm ${npm}; ` +
+          `${packageId}: exact verification failed (tgz SHA-256 ${digest}, frozen ${frozen.artifact.sha256}) under Node ${process.versions.node} / npm ${npm}; ` +
           `exact frozen toolchain is Node ${frozen.exactToolchain.node} / npm ${frozen.exactToolchain.npm}`,
         );
       }

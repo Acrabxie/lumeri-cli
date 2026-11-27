@@ -544,7 +544,7 @@
       "artifact": {
         "filename": "lumeri-cli-1.0.1.tgz",
         "entryCount": 47,
-        "sha256": "5dcc353f17f47f81d03d4a94ec59a593c8874d15124ee82c8789187517c70f46"
+        "sha256": "96fd495ff59c195cc9f87770726d812d365ba5a2668a10f84a9ebc71e86ffac0"
       },
       "exactToolchain": {
         "node": "26.5.0",
